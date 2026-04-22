@@ -126,6 +126,5 @@ Routes return **`400`** with `{"error": "..."}` for invalid actions or resolving
 
 Parts of this repository (file layout, docs, and some implementation scaffolding) were drafted with assistance from an AI coding tool, then reviewed, wired together, and tested by a human developer. Game balance and tests were verified locally with `pytest`.
 
-## No personal data
-
-The game does not collect personal user data. Secrets are read only from environment variables (never committed).
+## Special Note
+"My GitHub repo currently shows only a few commits because I had to fix a nested Git repository issue midway through the project. My server/ folder had accidentally been initialized as its own separate Git repo, which meant commits were tracked there instead of at the project root — so client/, tests/, and requirements.txt were never being committed to GitHub at all. To fix the structure properly I removed the nested repo, re-initialized Git at the correct project root, and force-pushed. That reset the commit history, but the codebase itself is complete and unchanged. I'm happy to walk through any part of the code, the design decisions, or the bug fixes I made."
