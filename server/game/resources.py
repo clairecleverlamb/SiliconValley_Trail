@@ -1,6 +1,6 @@
 """Resource update helpers."""
 
-from __future__ import annotations #
+from __future__ import annotations
 
 from typing import Any, Dict, List, Mapping, Optional
 
@@ -24,10 +24,10 @@ def delta_snapshots(
     return {k: int(after[k]) - int(before[k]) for k in RESOURCE_LABELS}
 
 
-def format_deltas(delta: Mapping[str, int]) -> str: #how much each resource changed
+def format_deltas(delta: Mapping[str, int]) -> str:
     parts: List[str] = []
     for key in ("cash", "morale", "hype", "coffee", "bugs"):
-        d = int(delta.get(key, 0)) #
+        d = int(delta.get(key, 0))
         if d == 0:
             continue
         label = RESOURCE_LABELS[key]
@@ -47,7 +47,6 @@ def format_deltas(delta: Mapping[str, int]) -> str: #how much each resource chan
 
 
 def apply_effects(state: Dict[str, Any], effects: Optional[Mapping[str, int]]) -> None:
-    # post-action effects, like the event choices
     if not effects:
         return
     r = state["resources"]
@@ -64,5 +63,4 @@ def clamp_resources(state: Dict[str, Any]) -> None:
     r["hype"] = max(0, min(100, r["hype"]))
     r["coffee"] = max(0, r["coffee"])
     r["bugs"] = max(0, r["bugs"])
-    # no cap for cash 
-    
+    # cash has no upper cap
