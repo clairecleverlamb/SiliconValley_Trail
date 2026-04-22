@@ -51,7 +51,7 @@ def resolve_turn(state: Dict[str, Any], action: str) -> Tuple[Dict[str, Any], st
     )
 
     _passive_decay(state)
-    resources.clamp_resources(state) ## this is the resource clamp, it ensures that the resources are within the valid range
+    resources.clamp_resources(state)
     after_passive = resources.resource_snapshot(state)
     passive_d = resources.format_deltas(
         resources.delta_snapshots(after_action, after_passive)
@@ -87,16 +87,17 @@ def resolve_turn(state: Dict[str, Any], action: str) -> Tuple[Dict[str, Any], st
 
     game_state.append_log(state, msg)
 
-    if conditions.check_lose(state):
-        state["day"] = state.get("day", 1) + 1
-        game_state.append_log(state, state.get("lost_reason") or "Game over.")
-        return state, state.get("lost_reason") or "Lost."
-
+    # Win is checked first: reaching SF is a win regardless of resource state.
     if conditions.check_win(state):
         win_msg = "You made it to San Francisco—time to pitch Series A."
         game_state.append_log(state, win_msg)
         state["day"] = state.get("day", 1) + 1
         return state, win_msg
+
+    if conditions.check_lose(state):
+        state["day"] = state.get("day", 1) + 1
+        game_state.append_log(state, state.get("lost_reason") or "Game over.")
+        return state, state.get("lost_reason") or "Lost."
 
     state["day"] = state.get("day", 1) + 1
     if conditions.check_time_out(state):
@@ -109,7 +110,6 @@ def resolve_turn(state: Dict[str, Any], action: str) -> Tuple[Dict[str, Any], st
         )
     return state, msg
 
-## resolve_event_turn function, it resolves the turn for the given event choice
 def resolve_event_turn(state: Dict[str, Any], choice: int) -> Tuple[Dict[str, Any], str]:
     if state["status"] != "playing":
         return state, "The journey is already over."
@@ -137,16 +137,17 @@ def resolve_event_turn(state: Dict[str, Any], choice: int) -> Tuple[Dict[str, An
 
     _update_coffee_emergency(state)
 
-    if conditions.check_lose(state):
-        state["day"] = state.get("day", 1) + 1
-        game_state.append_log(state, state.get("lost_reason") or "Game over.")
-        return state, state.get("lost_reason") or "Lost."
-
+    # Win is checked first: reaching SF is a win regardless of resource state.
     if conditions.check_win(state):
         win_msg = "You made it to San Francisco—time to pitch Series A."
         game_state.append_log(state, win_msg)
         state["day"] = state.get("day", 1) + 1
         return state, win_msg
+
+    if conditions.check_lose(state):
+        state["day"] = state.get("day", 1) + 1
+        game_state.append_log(state, state.get("lost_reason") or "Game over.")
+        return state, state.get("lost_reason") or "Lost."
 
     state["day"] = state.get("day", 1) + 1
     if conditions.check_time_out(state):
@@ -171,13 +172,12 @@ def resolve_event_turn(state: Dict[str, Any], choice: int) -> Tuple[Dict[str, An
         state["minigame_type"] = random.choice(
             ["mining", "typing", "coffee_hunt"]
         )
-        state["events_since_bonus"] = 0 # reset the events since bonus counter
+        state["events_since_bonus"] = 0
     else:
         state["mining_eligible"] = False
         state["minigame_type"] = None
         state["events_since_bonus"] = int(state.get("events_since_bonus", 0)) + 1
         state.pop("last_event_choice", None)
-    #after an event is resolved, we refresh the weather for the current city again 
     if state["status"] == "playing":
         idx = int(state.get("current_location_index", 0))
         weather_api.refresh_city_in_state(
