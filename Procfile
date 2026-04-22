@@ -1,1 +1,1 @@
-web: gunicorn --chdir server app:app
+web: gunicorn --chdir server --workers 1 --threads 4 app:app
