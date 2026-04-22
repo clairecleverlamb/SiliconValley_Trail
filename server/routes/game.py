@@ -1,5 +1,7 @@
-"""HTTP API for games — resource-oriented paths under /api/games. writes the rest-ish API to my game enginer
-   it only parses the request body and returns the response body, do delegation, error/response handling, it does not do any business logic
+"""HTTP API for games — resource-oriented paths under /api/games.
+
+Parses request bodies, delegates to game engine, handles errors, and returns JSON responses.
+Contains no game business logic.
 """
 
 from __future__ import annotations
