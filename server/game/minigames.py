@@ -93,13 +93,13 @@ def apply_mining_result(state: Dict[str, Any], success: bool) -> Tuple[Dict[str,
         )
         resources.clamp_resources(state)
         return state, out
-    r["morale"] = max(0, r.get("morale", 0) - MINING_FAIL_MORALE)
+    r["morale"] = max(0, r.get("morale", 0) - MINING_FAIL_MORALE) 
     r["hype"] = max(0, r.get("hype", 0) - MINING_FAIL_HYPE)
     game_state.append_log(
         state,
         f"Mining drill failed: -{MINING_FAIL_MORALE} morale, -{MINING_FAIL_HYPE} hype.",
     )
-    resources.clamp_resources(state)
+    resources.clamp_resources(state) 
     return state, out
 
 
