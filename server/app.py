@@ -15,7 +15,7 @@ from routes.game import bp as games_bp
 _ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(_ROOT / ".env")
 
-_CLIENT_DIR = Path(__file__).resolve().parent.parent / "client" # why parent parent? because the client is in the client folder
+_CLIENT_DIR = Path(__file__).resolve().parent.parent / "client"
 
 
 app = Flask(__name__, static_folder=str(_CLIENT_DIR), static_url_path="")
@@ -28,6 +28,6 @@ def index():
     return send_from_directory(app.static_folder, "index.html") # sending static file to the client 
 
 
-
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    import os
+    app.run(debug=os.getenv("FLASK_DEBUG", "0") == "1", port=5000)
