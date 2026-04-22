@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Silicon Valley Trail</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=VT323&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="crt-overlay" aria-hidden="true"></div>
+
+    <section id="splash-screen" class="screen screen--splash" aria-label="Title screen">
+      <div class="starfield" aria-hidden="true"></div>
+      <div class="splash-card">
+        <h1 class="splash-title">Silicon Valley Trail</h1>
+        <p class="splash-sub">A startup odyssey · San Jose → San Francisco</p>
+        <button type="button" class="splash-btn splash-btn--primary" id="btn-start-voyage">
+          START VOYAGE
+        </button>
+        <button type="button" class="splash-btn splash-btn--ghost" data-menu="load">Load saved game</button>
+        <p class="splash-hint">When you save in-game, you choose a name — use that exact name here to load.</p>
+      </div>
+    </section>
+
+    <div id="intro-overlay" class="intro-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="intro-heading">
+      <div class="intro-panel">
+        <div class="intro-head">
+          <h2 id="intro-heading" class="intro-heading">Transmission</h2>
+          <button type="button" class="intro-skip" id="intro-skip">Skip intro</button>
+        </div>
+        <div id="intro-text" class="intro-text"></div>
+        <button type="button" class="intro-continue hidden" id="intro-continue">Continue</button>
+      </div>
+    </div>
+
+    <div
+      id="mining-modal"
+      class="mining-modal minigame-modal hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mining-title"
+    >
+      <div class="mining-panel">
+        <div class="mining-head">
+          <span class="mining-icon" aria-hidden="true">⛏</span>
+          <h2 id="mining-title" class="mining-title">Codebase Mining Operation</h2>
+          <p class="mining-instructions">Click the crystals as they appear. Collect the target count before time runs out.</p>
+        </div>
+        <div id="mining-field" class="mining-field"></div>
+        <div class="mining-hud">
+          <span id="mining-count">Crystals: 0 / 12</span>
+          <span id="mining-timer">Time: 9s</span>
+        </div>
+        <button type="button" class="mining-abort" id="mining-abort">Abort mining</button>
+      </div>
+    </div>
+
+    <div
+      id="typing-modal"
+      class="mining-modal minigame-modal hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="typing-title"
+    >
+      <div class="mining-panel">
+        <div class="mining-head">
+          <span class="mining-icon" aria-hidden="true">☕</span>
+          <h2 id="typing-title" class="mining-title">Coffee run</h2>
+          <p class="mining-instructions" id="typing-instructions">
+            Type <strong>COFFEE</strong> three times in one string: <strong>COFFEECOFFEECOFFEE</strong> — no spaces.
+            Read the goal, then press <strong>Start</strong>; the timer only runs after that.
+          </p>
+          <p class="typing-target-display" id="typing-target-display">COFFEECOFFEECOFFEE</p>
+          <button type="button" class="ot-btn typing-start-btn" id="typing-start">Start typing</button>
+        </div>
+        <label class="typing-label" for="typing-input">Your typing</label>
+        <input
+          type="text"
+          class="typing-input"
+          id="typing-input"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="characters"
+          spellcheck="false"
+        />
+        <div class="mining-hud">
+          <span id="typing-progress">Goal: 21 characters (COFFEE × 3, no spaces)</span>
+          <span id="typing-timer">Press Start when you’re ready — the clock begins then.</span>
+        </div>
+        <button type="button" class="mining-abort" id="typing-abort">Skip bonus</button>
+      </div>
+    </div>
+
+    <div
+      id="coffee-hunt-modal"
+      class="mining-modal minigame-modal hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="coffee-hunt-title"
+    >
+      <div class="mining-panel coffee-hunt-panel">
+        <div class="mining-head">
+          <span class="mining-icon" aria-hidden="true">🫘</span>
+          <h2 id="coffee-hunt-title" class="mining-title">Hunt for coffee</h2>
+          <p class="mining-instructions">
+            Oregon-style: use <kbd>←</kbd> <kbd>→</kbd> to aim the thermos, <kbd>Space</kbd> to brew a shot at
+            flying beans. Bag <strong>6</strong> before time runs out. <kbd>Esc</kbd> to skip.
+          </p>
+        </div>
+        <canvas id="coffee-hunt-canvas" class="coffee-hunt-canvas" width="400" height="220" aria-label="Coffee hunt field"></canvas>
+        <div class="mining-hud">
+          <span id="coffee-hunt-count">Beans bagged: 0 / 6</span>
+          <span id="coffee-hunt-timer">Time: 20s</span>
+        </div>
+        <button type="button" class="mining-abort" id="coffee-hunt-abort">Skip bonus</button>
+      </div>
+    </div>
+
+    <div
+      id="io-prompt-modal"
+      class="io-prompt-modal hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="io-prompt-heading"
+    >
+      <div class="io-prompt-panel">
+        <h2 id="io-prompt-heading" class="io-prompt-heading">Save progress</h2>
+        <p id="io-prompt-desc" class="io-prompt-desc"></p>
+        <label id="io-prompt-label" class="io-prompt-label" for="io-prompt-input">Save name</label>
+        <input
+          type="text"
+          id="io-prompt-input"
+          class="io-prompt-input"
+          autocomplete="off"
+          maxlength="120"
+          spellcheck="false"
+        />
+        <p id="io-prompt-hint" class="io-prompt-hint hidden" role="alert"></p>
+        <div class="io-prompt-actions">
+          <button type="button" class="btn btn--ghost" id="io-prompt-cancel">Cancel</button>
+          <button type="button" class="btn btn--primary" id="io-prompt-confirm">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="app" class="app-root">
+      <section id="game-screen" class="screen screen--game hidden" aria-live="polite">
+        <div class="game-frame">
+          <header class="game-topbar">
+            <div class="game-topbar__brand">Silicon Valley Trail</div>
+            <div class="game-topbar__meta">
+              <span
+                class="pill"
+                id="header-day"
+                title="Each action uses one calendar day. You have a limited number of days to reach San Francisco. You also lose if cash hits zero."
+                >Day 1 / 20</span
+              >
+              <div class="game-topbar__locstack">
+                <span class="pill pill--accent" id="header-location">San Jose</span>
+                <div class="header-live-weather" id="header-live-weather" hidden>
+                  <span class="header-live-weather__icon" id="header-weather-icon" aria-hidden="true"></span>
+                  <span class="header-live-weather__txt" id="header-weather-txt"></span>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <p class="location-flavor" id="game-subtitle"></p>
+
+          <section class="supplies" aria-label="Resources">
+            <div class="supplies__title">Supplies &amp; status</div>
+            <div class="supplies__tips" id="supply-tips" aria-label="How you can lose"></div>
+            <div class="supplies__grid" id="resource-bar"></div>
+          </section>
+
+          <section class="trail-section" aria-label="Progress along the peninsula">
+            <div class="trail-section__label">The trail</div>
+            <div class="trail-track" id="trail-track"></div>
+            <div class="weather-line" id="weather-strip"></div>
+          </section>
+
+          <section class="narrative" aria-label="Latest report">
+            <div class="narrative__label">Report from last turn</div>
+            <div class="narrative__box" id="outcome-banner" role="status"></div>
+          </section>
+
+          <div id="event-panel" class="decision-panel hidden">
+            <div class="decision-panel__prompt">Something happened!</div>
+            <h2 class="decision-panel__title" id="event-title"></h2>
+            <p class="decision-panel__text" id="event-desc"></p>
+            <div class="decision-panel__label">What do you do?</div>
+            <ol class="choice-list" id="event-choices"></ol>
+          </div>
+
+          <div id="action-panel" class="decision-panel decision-panel--actions">
+            <div class="decision-panel__prompt">What do you want to do?</div>
+            <p class="action-rules-hint" id="action-rules-hint" hidden></p>
+            <p class="coffee-crisis hidden" id="coffee-crisis-note" role="alert"></p>
+            <ol class="action-list" id="action-list"></ol>
+          </div>
+
+          <section class="diary">
+            <div class="diary__label">Diary</div>
+            <ul id="log-list" class="diary__entries"></ul>
+          </section>
+
+          <footer class="game-footer">
+            <button type="button" class="btn btn--ghost" id="btn-save">Save progress</button>
+            <button type="button" class="btn btn--ghost" id="btn-exit" title="Return to title screen">
+              Exit
+            </button>
+          </footer>
+        </div>
+      </section>
+
+      <section id="end-screen" class="screen screen--end hidden">
+        <div class="end-card">
+          <div id="end-message" class="end-message"></div>
+          <pre class="end-stats" id="end-stats"></pre>
+          <button type="button" class="btn btn--primary" id="btn-play-again">Play again</button>
+        </div>
+      </section>
+    </div>
+
+    <script src="game.js" defer></script>
+  </body>
+</html>
