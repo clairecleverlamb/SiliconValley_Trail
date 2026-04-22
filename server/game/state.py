@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import copy
 import threading
 import uuid
 from typing import Any, Dict, List, Optional
@@ -71,7 +70,7 @@ def create_initial_state(game_id: str, weather_cache: Dict[str, Dict[str, Any]])
         "current_event": None,
         "mining_eligible": False,
         "minigame_type": None,
-        # Bonus rounds: first story event guarantees a minigame; after that, random + pity (see loop.resolve_event_turn).
+        # First event in a run guarantees a minigame; after that, random + pity (see loop.resolve_event_turn).
         "first_event_bonus_pending": True,
         "events_since_bonus": 0,
         "log": [],
@@ -87,7 +86,3 @@ def append_log(state: Dict[str, Any], message: str) -> None:
         del log[: len(log) - LOG_MAX]
 
 
-def clone_state(state: Dict[str, Any]) -> Dict[str, Any]:
-    # why deepcopy? because we want to make a copy of the state that is independent of the original state
-    # where do we use this? in the loop.resolve_turn function, we need to make a copy of the state to apply the effects of the action
-    return copy.deepcopy(state)
