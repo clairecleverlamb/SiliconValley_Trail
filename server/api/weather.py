@@ -7,14 +7,9 @@ from __future__ import annotations
 
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import requests
-from dotenv import load_dotenv
-
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-load_dotenv(_PROJECT_ROOT / ".env")
 
 OPEN_METEO_FORECAST = "https://api.open-meteo.com/v1/forecast"
 
