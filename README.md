@@ -12,7 +12,7 @@ Use this section for write-ups, proposals, and résumé bullets. It matches what
 | **HTTP framework** | **[Flask](https://flask.palletsprojects.com/)** | REST-style JSON API under `/api/games`, CORS for local dev, static hosting of the client from `client/`. *Not* Node.js or Express. |
 | **Language (client)** | **Vanilla JavaScript** | No React/Vue build step; `client/game.js` drives a single-page UI. |
 | **Markup & style** | **Plain HTML + CSS** | `client/index.html`, `client/style.css`. |
-| **Persistence** | **No database** | Active games live in an **in-memory** `dict` keyed by `game_id` (`server/game/state.py`). **Optional** save/load writes the same state shape to **`games/*.json`** on disk. |
+| **Persistence** | **No database** | Active games live in an **in-memory** `dict` keyed by `game_id` (`server/game/state.py`). **Optional** save/load writes the same state shape to **`games/*.json`** on disk. On Heroku, **both layers are ephemeral** — RAM and disk reset on every dyno restart. The production upgrade path is Redis (active sessions) + PostgreSQL (save files). |
 | **External weather API** | **[Open-Meteo](https://open-meteo.com/)** | Free JSON forecast, **no API key**. *Not* OpenWeatherMap. On failure or `WEATHER_OFFLINE=1`, the server uses **`WEATHER_FALLBACK`** mock data in `server/api/weather.py`. |
 | **HTTP client (server)** | **`requests`** | Blocking calls; bulk fetch for new games runs cities **in parallel** (thread pool) to avoid slow sequential startup. |
 | **Tests** | **[pytest](https://pytest.org/)** | Python tests in `tests/`; run from repo root. pytest is a **Python** test runner—it fits a Flask backend, not a Node-only stack. |
@@ -109,9 +109,48 @@ All outbound weather calls sit in `try`/`except`; any failure or rate limit fall
 
 Routes return **`400`** with `{"error": "..."}` for invalid actions or resolving events when none is active—never stack traces to the client.
 
+### Data storage — two layers
+
+The app has two separate storage layers with different lifecycles.
+
+**Layer 1 — Active game session (RAM)**
+
+Created the moment you click Start Voyage; lives in the `_games` Python dict in `server/game/state.py`.
+
+```
+Player clicks Start   →  POST /api/games                      →  _games["abc-123"] = { cash, morale, … }
+Player takes a turn   →  POST /api/games/abc-123/moves        →  _games["abc-123"] updated in RAM
+Player resolves event →  POST /api/games/abc-123/events/choices  →  _games["abc-123"] updated in RAM
+```
+
+This layer is **purely in-memory**. It is destroyed the instant the server process stops — whether from a crash, a redeploy, or Heroku's automatic 24-hour dyno restart. The browser error "This game no longer exists on the server" means this dict entry is gone.
+
+**Layer 2 — Saved game (disk)**
+
+Written only when the player explicitly clicks Save Progress. Stored as `games/<slug>.json` on the server's filesystem.
+
+```
+Player clicks Save    →  PUT  /api/games/abc-123/saves        →  games/my_save.json written to disk
+Player loads a save   →  POST /api/games/restore-save         →  reads games/my_save.json → back into _games
+```
+
+This layer survives a browser tab close or a new session — **but only on localhost**. On Heroku, the filesystem is also ephemeral: every dyno restart wipes the disk just like RAM, so saved files disappear at the same time as active sessions.
+
+**Summary**
+
+| | Layer 1 (active) | Layer 2 (saved) |
+|---|---|---|
+| Storage | RAM (`_games` dict) | Disk (`games/*.json`) |
+| Created | `POST /api/games` | `PUT /api/games/<id>/saves` |
+| Survives tab close | No | Yes (localhost only) |
+| Survives Heroku dyno restart | **No** | **No** (ephemeral filesystem) |
+| Survives `flask run` restart on localhost | No | **Yes** |
+
+**Production upgrade path:** replace `get_game` / `put_game` in `server/game/state.py` with Redis (active sessions survive restarts, work across multiple dynos), and replace the `games/*.json` file I/O in `server/routes/game.py` with PostgreSQL `UPSERT` calls (durable saves, queryable). The rest of the app does not need to change because all storage access is isolated to those two files.
+
 ### Tradeoffs
 
-- **Single active session** in memory keeps the stack small; save/load is file-based JSON for replayability without a database.
+- **Single active session** in memory keeps the stack small; save/load is file-based JSON for local replayability without a database. On Heroku both layers are ephemeral — a dyno restart wipes RAM and disk together. The designed upgrade path is Redis for active sessions and PostgreSQL for saves.
 - **Arrival events** are skipped on the final hop into San Francisco so you get a clear win state instead of a blocking modal after victory.
 - **Full state in every response** is slightly larger payloads but keeps the client trivial and guarantees the UI matches the server.
 
