@@ -4,3 +4,4 @@ __pycache__/
 .pytest_cache/
 .env
 games/*.json
+scaling_and_storage_notes.md
