@@ -141,6 +141,35 @@ The suite runs 31 tests in around 3 seconds. Weather API tests are included and 
 - **No arrival event fires on the final city.** San Francisco triggers the win screen immediately, not another decision modal.
 - **All randomness is testable without changing production code.** Functions that use random values accept an injectable source, so tests can control outcomes precisely without patching global state.
 
+### Game loop & balance
+
+Each turn follows the same pipeline regardless of action chosen:
+
+1. **Action** — the player's chosen handler runs (travel, rest, hackathon, pitch VC, marketing push, buy supplies), applying its base effects and any weather modifier.
+2. **Clamp** — resources are clamped to their legal ranges (`morale` and `hype` 0–100; `cash`, `coffee`, `bugs` floored at 0).
+3. **Passive decay** — every turn, regardless of action: −3 coffee, +1 bug, −`DAILY_OVERHEAD_CASH` ($320) cash. This represents burn rate and technical debt accumulating in the background.
+4. **Coffee emergency check** — if coffee hits 0, an emergency counter increments. Three consecutive turns at zero triggers a lose condition.
+5. **Win / lose check** — win (San Francisco reached) is evaluated before lose, so arriving on the same turn resources collapse still counts as a win.
+6. **Day counter advances** — then a time-out check fires; exceeding `MAX_JOURNEY_DAYS` (20) is the fifth lose condition.
+
+Balance was tuned around the constraint: $20k starting cash, $320/turn overhead, $1,500 base travel cost, and 20 days maximum. A player who only rests and never travels runs out of days; one who only travels runs out of cash. The tension is intentional — every action has a reason to use it and a cost that makes you hesitate.
+
+### API choice: Open-Meteo and how it affects gameplay
+
+Open-Meteo was chosen because it is **keyless, free, and requires no signup** — the app works on any fresh machine without configuration, which matters for a take-home that will be run by a reviewer. Real lat/lon coordinates for each trail city mean the weather reflects actual Peninsula microclimates (San Francisco is genuinely foggier and colder than San Jose), which grounds the game in its setting.
+
+Weather is mapped to five gameplay buckets, each with a travel modifier applied on top of the base $1,500 travel cost:
+
+| Condition | Cash | Morale | Coffee |
+|-----------|------|--------|--------|
+| Rain | −$500 | −5 | — |
+| Clouds | −$200 | −2 | — |
+| Fog | — | — | −2 |
+| Clear | — | +5 | — |
+| Other (snow, unknown) | — | −1 | — |
+
+This means weather is not just flavour — a rainy day adds $500 to the cost of traveling, which can matter when cash is tight. Players who check the weather panel before deciding whether to travel or wait are playing more efficiently.
+
 ### Storage and persistence
 
 The app has two storage layers:
@@ -176,35 +205,6 @@ After a minigame resolves, the game produces a message that ties the player's mo
 3. **Bare default** — if there is no event context at all, the plain mechanical result is returned.
 
 Every combination produces a valid message. Higher levels just produce more meaning.
-
-### Game loop & balance
-
-Each turn follows the same pipeline regardless of action chosen:
-
-1. **Action** — the player's chosen handler runs (travel, rest, hackathon, pitch VC, marketing push, buy supplies), applying its base effects and any weather modifier.
-2. **Clamp** — resources are clamped to their legal ranges (`morale` and `hype` 0–100; `cash`, `coffee`, `bugs` floored at 0).
-3. **Passive decay** — every turn, regardless of action: −3 coffee, +1 bug, −`DAILY_OVERHEAD_CASH` ($320) cash. This represents burn rate and technical debt accumulating in the background.
-4. **Coffee emergency check** — if coffee hits 0, an emergency counter increments. Three consecutive turns at zero triggers a lose condition.
-5. **Win / lose check** — win (San Francisco reached) is evaluated before lose, so arriving on the same turn resources collapse still counts as a win.
-6. **Day counter advances** — then a time-out check fires; exceeding `MAX_JOURNEY_DAYS` (20) is the fifth lose condition.
-
-Balance was tuned around the constraint: $20k starting cash, $320/turn overhead, $1,500 base travel cost, and 20 days maximum. A player who only rests and never travels runs out of days; one who only travels runs out of cash. The tension is intentional — every action has a reason to use it and a cost that makes you hesitate.
-
-### API choice: Open-Meteo and how it affects gameplay
-
-Open-Meteo was chosen because it is **keyless, free, and requires no signup** — the app works on any fresh machine without configuration, which matters for a take-home that will be run by a reviewer. Real lat/lon coordinates for each trail city mean the weather reflects actual Peninsula microclimates (San Francisco is genuinely foggier and colder than San Jose), which grounds the game in its setting.
-
-Weather is mapped to five gameplay buckets, each with a travel modifier applied on top of the base $1,500 travel cost:
-
-| Condition | Cash | Morale | Coffee |
-|-----------|------|--------|--------|
-| Rain | −$500 | −5 | — |
-| Clouds | −$200 | −2 | — |
-| Fog | — | — | −2 |
-| Clear | — | +5 | — |
-| Other (snow, unknown) | — | −1 | — |
-
-This means weather is not just flavour — a rainy day adds $500 to the cost of traveling, which can matter when cash is tight. Players who check the weather panel before deciding whether to travel or wait are playing more efficiently.
 
 ### Error handling
 
