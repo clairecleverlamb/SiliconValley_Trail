@@ -17,9 +17,9 @@ A replayable, Oregon Trail–style survival game for a scrappy startup driving f
 
 ## Required features — how each is met
 
-**1. Testing** — 31 passing pytest tests cover every critical area: resource updates (travel, weather modifiers, all action types), all four lose conditions (cash, morale, coffee, bugs, calendar timeout), win condition, event choice effects, bonus minigame offer/skip/pity rules, weather API fallbacks, and the full save/load cycle. All randomness is injectable via an `rng` parameter so tests use a controlled `Mock` instead of patching global state.
+**1. Testing** — 31 passing pytest tests cover every critical area: resource updates (travel, weather modifiers, all action types), all five lose conditions (cash, morale, coffee, bugs, calendar timeout), win condition, event choice effects, bonus minigame offer/skip/pity rules, weather API fallbacks, and the full save/load cycle. All randomness is injectable via an `rng` parameter so tests use a controlled `Mock` instead of patching global state.
 
-**2. Documentation** — This README documents the tech stack, API contract, status code matrix, game balance constants, storage layers, thread safety, and tradeoffs, with every claim verified against the code. [Design Notes](https://docs.google.com/document/d/1R2eA5L-KQ59NZut7s5cs9GnEsiwRfGLMpWYfgsh1hNQ/edit?tab=t.0) cover key architectural decisions and tradeoffs. [Test Tracker](https://docs.google.com/spreadsheets/d/1Ze7bkQS1GjRClXzMj7oVHJIh56OzV7ZNF-kzHdV8vNc/edit?gid=0#gid=0) logs manual testing scenarios.
+**2. Documentation** — This README documents the tech stack, API contract, storage layers, thread safety, design decisions, and future tradeoffs, with every claim verified against the code. [Design Notes](https://docs.google.com/document/d/1R2eA5L-KQ59NZut7s5cs9GnEsiwRfGLMpWYfgsh1hNQ/edit?tab=t.0) cover key architectural decisions. [Test Tracker](https://docs.google.com/spreadsheets/d/1Ze7bkQS1GjRClXzMj7oVHJIh56OzV7ZNF-kzHdV8vNc/edit?gid=0#gid=0) logs manual testing scenarios.
 
 **3. Decency & safety** — All Open-Meteo calls are wrapped in `try/except` with a static fallback so the game never crashes on network issues. Route handlers return structured `{"error": "..."}` JSON with correct status codes; no stack traces reach the browser. The app has no API keys (Open-Meteo is keyless); all environment flags use `os.getenv()`. No user data is collected — sessions are anonymous server-generated UUIDs, save files contain only game state, and there are no cookies, logins, or analytics.
 
@@ -60,15 +60,15 @@ Open [http://127.0.0.1:5000](http://127.0.0.1:5000) in your browser.
 
 > **Single-process only.** Active game sessions live in an in-memory Python dict. Running with multiple workers (e.g. `gunicorn --workers 2 app:app`) splits that dict across processes, so a second request for the same game can hit a different worker and return "Game not found." The default `flask run` is single-process — safe for local dev. Production uses `gunicorn --workers 1 --threads 4` for the same reason: one process, multiple threads share the same dict.
 
-To run the API on another port:
+To run on a different port (e.g. 8080):
 
 ```bash
-flask --app app run --port 5000
+flask --app app run --port 8080
 ```
 
 ## Weather (Open-Meteo) and offline play
 
-1. **Live fetch** — The server calls [Open-Meteo](https://open-meteo.com/) (no API key required) using fixed lat/lon coordinates for each trail city. Temperature is returned in Fahrenheit; conditions are derived from the WMO `weather_code` field and mapped to the labels the game rules understand (`rain`, `fog`, `clouds`, `clear`).
+1. **Live fetch** — The server calls [Open-Meteo](https://open-meteo.com/) (no API key required) using fixed lat/lon coordinates for each trail city. Temperature is returned in Fahrenheit; conditions are derived from the WMO `weather_code` field and mapped to five buckets the game rules understand: `rain`, `clear`, `fog`, `clouds`, and `other` (snow and unrecognised codes).
 
 2. **Server-side cache** — Every successful response is cached in-process for 5 minutes, shared across all concurrent games. This keeps the app well within Open-Meteo's fair-use limits even under load, and means a city fetched for one player's turn is immediately reused for others within the TTL window.
 
@@ -104,23 +104,6 @@ Registered under **`/api/games`** in `server/app.py` (handlers in `server/routes
 | `POST` | `/api/games/<game_id>/minigames/typing` | Same body — coffee typing sprint (`minigame_type`: `"typing"`). |
 | `POST` | `/api/games/<game_id>/minigames/coffee_hunt` | Same body — aim-and-shoot bean hunt (`minigame_type`: `"coffee_hunt"`). |
 
-### HTTP status codes
-
-The API uses the full 4xx/5xx matrix rather than returning `400` for every non-200 response:
-
-| Code | When used |
-|------|-----------|
-| `400` | Bad client request — invalid action name, missing required field, `success` not a JSON boolean, attempting a move while an event is pending resolution |
-| `404` | Resource not found — game not in memory, save file not on disk |
-| `409` | Conflict — save name already claimed by a different game |
-| `500` | Server-side data error — save file exists but cannot be read or parsed, or its internal `game_id` is missing/mismatched |
-
-This is intentional: a `400` tells the client "you sent bad data, retry differently"; a `404` tells it "this resource doesn't exist"; a `500` tells it "something is wrong on the server, not your fault."
-
-This is **more resource-oriented** than a single `/action` endpoint: the **game id is in the URL**, which matches common REST-style patterns (even though move names are still RPC-like in the JSON body).
-
-After most resolved events, the server sets `mining_eligible` and picks a random `minigame_type` (`"mining"`, `"typing"`, or `"coffee_hunt"`). The **first** event you resolve in a new run always triggers a bonus; after that, the server rolls against `BONUS_MINIGAME_CHANCE = 0.55` (55%) with a **pity** rule — the bonus is guaranteed if you've gone two events without one. The **client** runs the matching modal and POSTs `{"success": true|false}`; **rewards are applied on the server** so state stays authoritative.
-
 ## Running tests
 
 From the **project root** (where `pytest.ini` lives), with the virtualenv active:
@@ -129,37 +112,18 @@ From the **project root** (where `pytest.ini` lives), with the virtualenv active
 pytest tests/
 ```
 
-The suite runs 31 tests in under a second (excluding the live weather network tests, which use `monkeypatch` to mock the HTTP layer). All randomness is injectable via an `rng` parameter on the public game-logic functions so tests can pass a seeded `random.Random` or a `Mock` with controlled `.random()` / `.choice()` return values — no global state patching required.
+The suite runs 31 tests in around 3 seconds. Weather API tests are included and use `monkeypatch` to mock the HTTP layer so no live network calls are made. All randomness is injectable via an `rng` parameter so tests pass a `Mock` with controlled return values — no global state patching required.
 
 ## Design notes
 
-### Game balance constants
+### Key design decisions
 
-All tunable numbers live as named constants rather than inline values, so the full difficulty profile is visible in one place and changing any single value requires editing one line.
-
-| Constant | Value | Meaning |
-|----------|-------|---------|
-| `STARTING_CASH` | $20,000 | Cash every new run begins with |
-| `DAILY_OVERHEAD_CASH` | $320 | Cash burned every turn (payroll + burn rate) |
-| `MAX_JOURNEY_DAYS` | 20 | Calendar days before time-out loss |
-| `BUGS_LOSE_THRESHOLD` | 20 | Bug count that triggers a loss (strictly greater than 20) |
-| `BONUS_MINIGAME_CHANCE` | 55% | Probability of a bonus minigame after each event |
-| `VC_PITCH_SUCCESS_RATE` | 60% | Chance a VC pitch succeeds |
-| `P_WEATHER_EVENT_ROUGH` | 42% | Chance a weather event fires under rain, fog, or clouds |
-| `P_WEATHER_EVENT_CALM` | 24% | Same chance under clear skies — intentionally lower |
-
-### Weather
-
-The server fetches live conditions from [Open-Meteo](https://open-meteo.com/) — a free, keyless API — for each city on the trail. Conditions are mapped to four gameplay buckets:
-
-- **Rain** — extra travel cash cost and morale hit
-- **Clear** — small morale boost on arrival
-- **Fog** — slight extra coffee drain
-- **Clouds** — mild cash and morale penalty
-
-On top of direct modifiers, each arrival also rolls against weather-event probabilities. Rough conditions (rain, fog, clouds) produce a weather event 42% of the time; clear skies produce one 24% of the time. This gap is intentional — bad weather should feel meaningfully more disruptive.
-
-To stay within Open-Meteo's fair-use limits, every successful response is cached for 5 minutes and shared across all active games. If a fetch fails for any reason — timeout, bad response, or HTTP 429 — the server falls back to a static per-city forecast so the game never blocks on weather. Set `WEATHER_OFFLINE=1` in `.env` to skip live calls entirely and always use the static fallback.
+- **The server owns all game state.** The browser never calculates rewards or advances the game on its own — it sends an action and re-renders from whatever the server returns. This makes cheating structurally difficult and keeps the client trivially simple.
+- **Every response returns the full state.** Rather than sending a diff, the server always returns a complete snapshot. The client never has to merge, track deltas, or risk falling out of sync.
+- **The game is designed to never crash on external failures.** Weather API calls always have a fallback. Routes always return structured error JSON. No unhandled exception reaches the browser.
+- **Win takes priority over lose.** Reaching San Francisco on a turn where resources also hit a threshold counts as a win, not a loss — the destination is the goal.
+- **No arrival event fires on the final city.** San Francisco triggers the win screen immediately, not another decision modal.
+- **All randomness is testable without changing production code.** Functions that use random values accept an injectable source, so tests can control outcomes precisely without patching global state.
 
 ### Storage and persistence
 
@@ -177,7 +141,7 @@ Both layers are ephemeral on Heroku — the platform periodically restarts its s
 
 ### Thread safety
 
-All active games share a single in-memory dict across every request thread. Both read (`get_game`) and write (`put_game`) operations are protected by a `threading.Lock` so concurrent requests cannot interleave and corrupt state. The weather cache uses a separate lock for the same reason. Per-game locking — serialising multiple simultaneous moves on the *same* game — would be the next step for higher concurrency.
+All active games share a single in-memory dict across every request thread. Both read (`get_game`) and write (`put_game`) operations are protected by a `threading.Lock` so concurrent requests cannot interleave and corrupt state. The weather cache uses a separate lock for the same reason. The next step for higher concurrency is optimistic concurrency control — stamping each state with a version number and rejecting writes based on a stale version, so conflicting requests retry rather than silently overwrite each other.
 
 ### Minigame integrity
 
@@ -196,15 +160,6 @@ After a minigame resolves, the game produces a message that ties the player's mo
 3. **Bare default** — if there is no event context at all, the plain mechanical result is returned.
 
 Every combination produces a valid message. Higher levels just produce more meaning.
-
-### Key design decisions
-
-- **The server owns all game state.** The browser never calculates rewards or advances the game on its own — it sends an action and re-renders from whatever the server returns. This makes cheating structurally difficult and keeps the client trivially simple.
-- **Every response returns the full state.** Rather than sending a diff, the server always returns a complete snapshot. The client never has to merge, track deltas, or risk falling out of sync.
-- **The game is designed to never crash on external failures.** Weather API calls always have a fallback. Routes always return structured error JSON. No unhandled exception reaches the browser.
-- **Win takes priority over lose.** Reaching San Francisco on a turn where resources also hit a threshold counts as a win, not a loss — the destination is the goal.
-- **No arrival event fires on the final city.** San Francisco triggers the win screen immediately, not another decision modal.
-- **All randomness is testable without changing production code.** Functions that use random values accept an injectable source, so tests can control outcomes precisely without patching global state.
 
 ## Future Improvements — Systems Thinking at Scale
 
