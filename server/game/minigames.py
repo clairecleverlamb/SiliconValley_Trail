@@ -45,6 +45,7 @@ def _wrong_minigame(state: Dict[str, Any], expected: str) -> bool:
 
 
 def apply_mining_result(state: Dict[str, Any], success: bool) -> Tuple[Dict[str, Any], str]:
+    # check if the game is still playing a stale HTTP requests can be sent from browser POSTing to minigames endpoint
     if state.get("status") != "playing":
         return state, "The journey is already over."
     if _wrong_minigame(state, "mining"):
