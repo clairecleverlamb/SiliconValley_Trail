@@ -103,6 +103,26 @@ It offers a **free JSON API without an API key** for non-commercial use, documen
 
 Travel also has a **20%** chance to replace the normal location draw with a **weather event** when the cached condition matches **rain**, **clear** (sunny template), or **fog / mist / haze** (see `get_weather_event` / `pick_event` in `server/game/events.py`).
 
+### Minigame cheat resistance
+
+Minigame rewards are applied **server-side only**. The client runs the visual modal, then POSTs `{"success": true|false}` to the matching endpoint. Before applying any reward the server checks three conditions in `_wrong_minigame` (`server/game/minigames.py`):
+
+| Guard | What it blocks |
+|---|---|
+| `status != "playing"` | Late POST after win/lose screen |
+| `mining_eligible == False` | POST when no minigame was offered this turn |
+| `minigame_type != expected` | POST to `/minigames/typing` when it's a `coffee_hunt` turn |
+
+If any guard fails the server returns a no-op message and leaves state unchanged. A client (or a curl script) cannot award itself resources by POSTing to minigame endpoints outside the normal flow.
+
+### Bonus narrative design
+
+After every resolved event, `bonus_narrative.py` picks a contextual message that connects the story choice to the minigame result. The module uses a **data/logic separation** pattern:
+
+- `_NARRATIVES` stores only the unique one-sentence flavor text per `(event_id, choice_label, minigame, success)` key.
+- `_build_message` assembles the full line from prefix + narrative + resource suffix — the boilerplate is generated once in code, not repeated 360 times in data.
+- Combinations not in `_NARRATIVES` fall through to a generic `'After "label": …'` bridge, so every possible combination produces a valid message without requiring exhaustive hand-written content.
+
 ### Error handling and fallback
 
 All outbound weather calls sit in `try`/`except`; any failure or rate limit falls back to the static `WEATHER_FALLBACK` map so the game never crashes on network issues.
