@@ -27,7 +27,7 @@ A replayable, Oregon Trail–style survival game for a scrappy startup driving f
 
 ## Tech stack (authoritative)
 
-Use this section for write-ups, proposals, and résumé bullets. It matches what this repository actually runs.
+Use this section for write-ups, proposals. It matches what this repository actually runs.
 
 | Area | Choice | Notes |
 |------|--------|--------|
@@ -35,13 +35,13 @@ Use this section for write-ups, proposals, and résumé bullets. It matches what
 | **HTTP framework** | **[Flask](https://flask.palletsprojects.com/)** | REST-style JSON API under `/api/games`, CORS for local dev, static hosting of the client from `client/`. *Not* Node.js or Express. |
 | **Language (client)** | **Vanilla JavaScript** | No React/Vue build step; `client/game.js` drives a single-page UI. |
 | **Markup & style** | **Plain HTML + CSS** | `client/index.html`, `client/style.css`. |
-| **Persistence** | **No database** | Active games live in an **in-memory** `dict` keyed by `game_id` (`server/game/state.py`). **Optional** save/load writes the same state shape to **`games/*.json`** on disk. On Heroku, **both layers are ephemeral** — RAM and disk reset on every dyno restart. The production upgrade path is Redis (active sessions) + PostgreSQL (save files). |
-| **External weather API** | **[Open-Meteo](https://open-meteo.com/)** | Free JSON forecast, **no API key**. *Not* OpenWeatherMap. On failure or `WEATHER_OFFLINE=1`, the server uses **`WEATHER_FALLBACK`** mock data in `server/api/weather.py`. |
+| **Persistence** | **No database** | Active games live in an **in-memory** `dict` keyed by `game_id` (`server/game/state.py`). **Optional** save/load writes the same state shape to **`games/*.json`** on disk. On Heroku, **both layers are ephemeral** — RAM and disk reset on every dyno restart. The proposed production upgrade path is Redis (active sessions) + PostgreSQL (save files). No implementation of Redis and PostgreSQL yet. |
+| **External weather API** | **[Open-Meteo](https://open-meteo.com/)** | Free JSON forecast, **no API key**. On failure or `WEATHER_OFFLINE=1`, the server uses **`WEATHER_FALLBACK`** mock data in `server/api/weather.py`. |
 | **HTTP client (server)** | **`requests`** | Blocking calls; bulk fetch for new games runs all cities **in parallel** via `ThreadPoolExecutor` — wall-clock time is one round-trip instead of ten sequential fetches. |
 | **Tests** | **[pytest](https://pytest.org/)** | 31 tests in `tests/`; run from repo root. pytest is a **Python** test runner — it fits a Flask backend, not a Node-only stack. |
 | **Config** | **`python-dotenv`** | Optional `.env` (see `.env.example`) for flags like `WEATHER_OFFLINE`. |
 
-**Why this is internally consistent:** A stack of "Node + Express + pytest + in-memory Python dict" would not match a single codebase: pytest and a Python `dict` imply a **Python** server. This project is **Python + Flask** end-to-end on the server, with a **browser** client that only speaks HTTP/JSON.
+**Server is Python end-to-end** — Flask, pytest, game logic, and weather integration are all in the same Python codebase. The browser client only communicates via HTTP/JSON and contains no game logic.
 
 **How state flows:** The browser sends actions (`POST` moves, event choices, minigame results). The server updates the authoritative state and returns **full JSON state** in every response so the UI always reflects server truth — no client-side simulation of rewards.
 
@@ -58,7 +58,7 @@ flask --app app run
 
 Open [http://127.0.0.1:5000](http://127.0.0.1:5000) in your browser.
 
-> **Single-process only.** Active game sessions live in an in-memory Python dict. Running with multiple workers (e.g. `flask run --processes 2` or a multi-worker Gunicorn) splits that dict across processes, so a second request for the same game will hit a different worker and get "Game not found." The default `flask run` is single-process — keep it that way locally. Production uses `gunicorn --workers 1 --threads 4` for the same reason.
+> **Single-process only.** Active game sessions live in an in-memory Python dict. Running with multiple workers (e.g. `gunicorn --workers 2 app:app`) splits that dict across processes, so a second request for the same game can hit a different worker and return "Game not found." The default `flask run` is single-process — safe for local dev. Production uses `gunicorn --workers 1 --threads 4` for the same reason: one process, multiple threads share the same dict.
 
 To run the API on another port:
 
@@ -68,11 +68,13 @@ flask --app app run --port 5000
 
 ## Weather (Open-Meteo) and offline play
 
-1. By default the server calls **[Open-Meteo](https://open-meteo.com/)** (no API key) using fixed lat/lon per trail city. Temperature is requested in **Fahrenheit**; conditions come from WMO `weather_code` mapped to labels the game understands.
+1. **Live fetch** — The server calls [Open-Meteo](https://open-meteo.com/) (no API key required) using fixed lat/lon coordinates for each trail city. Temperature is returned in Fahrenheit; conditions are derived from the WMO `weather_code` field and mapped to the labels the game rules understand (`rain`, `fog`, `clouds`, `clear`).
 
-2. Optional: copy `.env.example` to `.env` and set **`WEATHER_OFFLINE=1`** to **never** call the network and always use **built-in mock weather** per city in `server/api/weather.py`.
+2. **Server-side cache** — Every successful response is cached in-process for 5 minutes, shared across all concurrent games. This keeps the app well within Open-Meteo's fair-use limits even under load, and means a city fetched for one player's turn is immediately reused for others within the TTL window.
 
-3. If the live request **fails** (timeout, error, bad JSON), the game **falls back** to that same mock map so play always continues.
+3. **Offline mode** — Copy `.env.example` to `.env` and set `WEATHER_OFFLINE=1` to bypass all network calls entirely. The server uses `WEATHER_FALLBACK` — a static per-city dict in `server/api/weather.py` — with realistic Peninsula conditions for each location.
+
+4. **Fault tolerance** — Any live request that fails (network timeout, non-200 response, malformed JSON, or HTTP 429 rate-limit) falls back to the same `WEATHER_FALLBACK` dict. The game never blocks or crashes on weather unavailability.
 
 ## Architecture overview
 
@@ -81,7 +83,7 @@ flask --app app run --port 5000
 | **Flask** (`server/app.py`) | HTTP API, CORS, serves the static client from `client/`. Port is read from `$PORT` (Heroku) with a fallback of 5000 for local dev. |
 | **`server/game/`** | All rules: state shape, actions, turn loop, events, win/lose checks. No business rules in route handlers beyond parsing JSON and delegating. |
 | **In-memory state** | Games keyed by `game_id` in a thread-safe `_games` dict (protected by `threading.Lock`) in `server/game/state.py`; optional save/load writes JSON under `games/`. |
-| **`server/api/weather.py`** | [Open-Meteo](https://open-meteo.com/) `v1/forecast` (`current=temperature_2m,weather_code`, Fahrenheit), with per-city fallback dict. Bulk fetch parallelised with `ThreadPoolExecutor`. |
+| **`server/api/weather.py`** | [Open-Meteo](https://open-meteo.com/) `v1/forecast` (`current=temperature_2m,weather_code`, Fahrenheit), with per-city fallback dict. Bulk fetch parallelised with `ThreadPoolExecutor`. Successful responses are cached server-wide for 5 minutes (`_server_weather_cache`, guarded by `threading.Lock`) to stay within Open-Meteo fair-use limits; any error (including HTTP 429) falls back to the static dict so the game never blocks on weather. |
 
 The browser **does not own game state**: after each `fetch`, the UI re-renders from the JSON the server returns.
 
@@ -108,10 +110,10 @@ The API uses the full 4xx/5xx matrix rather than returning `400` for every non-2
 
 | Code | When used |
 |------|-----------|
-| `400` | Bad client request — invalid action name, missing required field, `success` not a JSON boolean |
+| `400` | Bad client request — invalid action name, missing required field, `success` not a JSON boolean, attempting a move while an event is pending resolution |
 | `404` | Resource not found — game not in memory, save file not on disk |
 | `409` | Conflict — save name already claimed by a different game |
-| `500` | Server-side data error — save file on disk has a corrupted or mismatched `game_id` |
+| `500` | Server-side data error — save file exists but cannot be read or parsed, or its internal `game_id` is missing/mismatched |
 
 This is intentional: a `400` tells the client "you sent bad data, retry differently"; a `404` tells it "this resource doesn't exist"; a `500` tells it "something is wrong on the server, not your fault."
 
@@ -133,194 +135,92 @@ The suite runs 31 tests in under a second (excluding the live weather network te
 
 ### Game balance constants
 
-All tunable numbers that affect gameplay difficulty live as named module-level constants rather than inline magic values:
+All tunable numbers live as named constants rather than inline values, so the full difficulty profile is visible in one place and changing any single value requires editing one line.
 
-| Constant | Value | File | Meaning |
-|----------|-------|------|---------|
-| `STARTING_CASH` | `$20,000` | `state.py` | Cash every new run begins with |
-| `DAILY_OVERHEAD_CASH` | `$320` | `state.py` | Cash burned every turn (payroll + rent) |
-| `MAX_JOURNEY_DAYS` | `20` | `state.py` | Calendar days before time-out loss |
-| `BUGS_LOSE_THRESHOLD` | `20` | `state.py` | Bug count that triggers a loss (strictly greater than) |
-| `BONUS_MINIGAME_CHANCE` | `0.55` | `loop.py` | Probability of a bonus minigame after each event |
-| `P_WEATHER_EVENT_ROUGH` | `0.42` | `events.py` | Chance a weather event replaces a location event under rain/fog/clouds |
-| `P_WEATHER_EVENT_CALM` | `0.24` | `events.py` | Same chance under clear skies (intentionally lower) |
-| `VC_PITCH_SUCCESS_RATE` | `0.6` | `actions.py` | 60% of VC pitches succeed |
+| Constant | Value | Meaning |
+|----------|-------|---------|
+| `STARTING_CASH` | $20,000 | Cash every new run begins with |
+| `DAILY_OVERHEAD_CASH` | $320 | Cash burned every turn (payroll + burn rate) |
+| `MAX_JOURNEY_DAYS` | 20 | Calendar days before time-out loss |
+| `BUGS_LOSE_THRESHOLD` | 20 | Bug count that triggers a loss (strictly greater than 20) |
+| `BONUS_MINIGAME_CHANCE` | 55% | Probability of a bonus minigame after each event |
+| `VC_PITCH_SUCCESS_RATE` | 60% | Chance a VC pitch succeeds |
+| `P_WEATHER_EVENT_ROUGH` | 42% | Chance a weather event fires under rain, fog, or clouds |
+| `P_WEATHER_EVENT_CALM` | 24% | Same chance under clear skies — intentionally lower |
 
-Naming these constants serves two purposes: a reviewer can find every balance parameter without reading through function bodies, and changing one value (e.g. tightening the runway from $20k to $15k) requires editing a single line.
+### Weather
 
-### Why Open-Meteo
+The server fetches live conditions from [Open-Meteo](https://open-meteo.com/) — a free, keyless API — for each city on the trail. Conditions are mapped to four gameplay buckets:
 
-It offers a **free JSON API without an API key** for non-commercial use, documented at [open-meteo.com](https://open-meteo.com/). We map `current.weather_code` (WMO standard) to the same gameplay condition buckets and use `temperature_2m` in Fahrenheit for the UI temperature display.
+- **Rain** — extra travel cash cost and morale hit
+- **Clear** — small morale boost on arrival
+- **Fog** — slight extra coffee drain
+- **Clouds** — mild cash and morale penalty
 
-### How weather affects play
+On top of direct modifiers, each arrival also rolls against weather-event probabilities. Rough conditions (rain, fog, clouds) produce a weather event 42% of the time; clear skies produce one 24% of the time. This gap is intentional — bad weather should feel meaningfully more disruptive.
 
-- **Rain** (including drizzle and thunderstorm codes): extra travel cash cost and morale hit (`apply_weather_modifiers` in `server/api/weather.py`).
-- **Clear**: small morale boost on travel into that city's forecast.
-- **Haze / fog / mist / smoke**: small extra coffee drain (long, weird days).
+To stay within Open-Meteo's fair-use limits, every successful response is cached for 5 minutes and shared across all active games. If a fetch fails for any reason — timeout, bad response, or HTTP 429 — the server falls back to a static per-city forecast so the game never blocks on weather. Set `WEATHER_OFFLINE=1` in `.env` to skip live calls entirely and always use the static fallback.
 
-When arriving at a new city the server also rolls against weather-event probabilities: **42%** under rough conditions (rain, fog, clouds — `P_WEATHER_EVENT_ROUGH`) or **24%** under calm skies (`P_WEATHER_EVENT_CALM`). If the roll triggers, a weather event (`WEATHER_EVENT_RAIN`, `WEATHER_EVENT_SUNNY`, or `WEATHER_EVENT_FOG`) replaces the normal location draw. The two thresholds are different by design — bad weather should make weather events meaningfully more common, not merely slightly more likely.
+### Storage and persistence
 
-### Minigame cheat resistance
+The app has two storage layers:
 
-Minigame rewards are applied **server-side only**. The client runs the visual modal, then POSTs `{"success": true|false}` to the matching endpoint. The server enforces two layers of protection:
+| | Active session | Saved game |
+|---|---|---|
+| Where | RAM (`_games` dict) | Disk (`games/*.json`) |
+| Created | When you start a new game | When you click Save Progress |
+| Survives browser tab close | No | Yes (localhost only) |
+| Survives server restart | No | Yes (localhost only) |
+| Survives Heroku dyno restart | **No** | **No** |
 
-**Input validation** — the `success` field must be a strict JSON boolean (`true` or `false`). Any other type — including a string like `"yes"` or an integer like `1` — is rejected with `400`. This matters because `bool("no")` in Python evaluates to `True`, so a naive `bool()` cast would silently accept strings as truthy.
-
-**State guards** — before applying any reward, `_wrong_minigame` (`server/game/minigames.py`) checks three conditions:
-
-| Guard | What it blocks |
-|---|---|
-| `status != "playing"` | Late POST after win/lose screen |
-| `mining_eligible == False` | POST when no minigame was offered this turn |
-| `minigame_type != expected` | POST to `/minigames/typing` when it's a `coffee_hunt` turn |
-
-If any guard fails the server returns a no-op message and leaves state unchanged. A client — or a `curl` script — cannot award itself resources by POSTing to minigame endpoints outside the normal flow.
-
-### Bonus narrative — three-level fallback design
-
-After a minigame resolves, `bonus_narrative.py` produces a contextual message that connects the player's story choice to the minigame result. The system uses a **three-level fallback chain** so every possible combination always produces a valid message, but higher levels reward high-drama moments with richer storytelling.
-
-**Level 1 — Bespoke narrative (hand-written for high-drama combinations)**
-
-`_NARRATIVES` is a dict keyed by `(event_id, choice_label)`. If the exact combination exists, `_build_message` composes prefix + unique prose + resource suffix into one contextually meaningful line.
-
-Example — player declined a VC pitch, then won the mining minigame:
-```
-Bonus WON — Polite decline on the pitch—then a sharp mining sprint.
-The partner smirks: you're not desperate, but you execute.
-(+$750 cash, +5 coffee, +3 morale, +3 hype)
-```
-This works because the two events have an ironic relationship: declining a powerful VC and then immediately executing well tells a coherent story. A generic message would lose that.
-
-**Level 2 — Generic bridge (label-prefixed default)**
-
-When `_NARRATIVES` has no entry for this combination, but `last_event_choice` still carries the choice label, the function prefixes the mechanical default with the player's decision:
-
-```python
-return f'After "{label}": {default_message}'
-```
-
-Example — player paid for rush shipping, then won mining:
-```
-After "Pay for rush shipping": Bonus WON — Mining haul secured: +$750 cash, +5 coffee, +3 morale, +3 hype.
-```
-This is correct and intentional. Paying for shipping and then winning at mining have no special narrative relationship — the bridge is informative without inventing meaning that isn't there.
-
-**Level 3 — Bare fallback (no context)**
-
-If there is no prior event context at all (minigame fires after a non-event action, or state is missing context), the raw default message is returned as-is:
-```
-Bonus WON — Mining haul secured: +$750 cash, +5 coffee, +3 morale, +3 hype.
-```
-
-**The code in three lines:**
-```python
-narrative = _NARRATIVES.get((event_id, label), {}).get(minigame, {}).get(success)
-if narrative:               return _build_message(narrative, ...)  # Level 1
-if label:                   return f'After "{label}": {default}'   # Level 2
-                            return default                          # Level 3
-```
-
-**Why data/logic separation matters here:** `_NARRATIVES` stores only the unique one-sentence prose per combination — no boilerplate. `_build_message` generates "Bonus WON/LOST", resource formatting, and spacing once. Changing how resource changes are displayed means editing one function, not hunting through a large data dict. Adding new story content means adding one prose sentence, not copy-pasting a full template block.
-
-### Error handling, rate limits, and weather caching
-
-**Network failures and HTTP errors**
-
-All Open-Meteo calls are wrapped in `try`/`except`. Any error — `ConnectionError`, timeout, malformed JSON, or an HTTP error status — is caught and the function returns the static `WEATHER_FALLBACK` for that city instead. The game never crashes or blocks on weather availability. The fallback uses `.get(city, WEATHER_FALLBACK["San Jose"])` (never a bare subscript) so an unknown city name never raises a `KeyError`.
-
-**Rate limit handling — server-level TTL cache**
-
-Open-Meteo is a free, keyless API with fair-use rate limits. Without caching, every game turn (`refresh_city_in_state` is called after travel, non-travel actions, and event resolutions) would make a live HTTP request. One 20-turn game = 20+ API calls; multiply by concurrent players and this hits rate limits quickly.
-
-The solution is a **server-wide TTL cache** in `server/api/weather.py`:
-
-```
-First request for "Mountain View"  →  live API call  →  cached for 5 minutes
-All subsequent requests within TTL  →  served from _server_weather_cache (no API call)
-429 / any error during fetch        →  WEATHER_FALLBACK returned, cache NOT poisoned
-                                       (next fresh request will retry the live API)
-```
-
-Key design decisions:
-- **5-minute TTL** (`_CACHE_TTL_SECONDS = 300`): weather doesn't change meaningfully between turns; 5 minutes balances freshness against API load.
-- **Cache is shared across all players/games** in the process: a city fetched for one player's turn is reused for all others — the benefit scales with traffic.
-- **Only successful responses are cached**: errors fall back silently and do not write to the cache, so a transient 429 or network blip doesn't freeze weather data for 5 minutes.
-- **`threading.Lock`** guards the cache dict so concurrent requests for the same city don't trigger duplicate live fetches.
-
-**HTTP 429 (Too Many Requests) specifically:** `res.raise_for_status()` raises a `requests.HTTPError` for any 4xx/5xx response, which is caught by `except Exception` and triggers the fallback. The cache prevents the burst of requests that would cause a 429 in the first place.
-
-**Production upgrade path:** replace `_server_weather_cache` with a Redis key with a TTL (`SETEX city_name 300 data`). This makes the cache durable across dyno restarts and shared across multiple dynos — the same `fetch_weather` interface, just backed by Redis instead of a process-local dict.
-
-**API inputs and route errors**
-
-Route handlers return structured `{"error": "..."}` JSON for all error cases. Status codes follow the client-vs-server fault model described in the HTTP status codes section above — never raw stack traces to the browser.
+Both layers are ephemeral on Heroku — the platform periodically restarts its servers and wipes both RAM and disk when it does. The "Game not found" error means the active session in RAM was cleared. Save files disappear for the same reason. The production upgrade path is Redis for active sessions and PostgreSQL for saves; because all storage access is isolated to two files, nothing else in the app would need to change.
 
 ### Thread safety
 
-`_games` is a process-wide in-memory dict shared across all Flask threads. Access is protected by `threading.Lock()` in `get_game` and `put_game` (`server/game/state.py`) to prevent concurrent requests for the same game from interleaving reads and writes. For a single-worker deployment this lock prevents corruption at the dict level; per-game locking (to prevent two simultaneous moves on the same game) would be the next step for higher concurrency.
+All active games share a single in-memory dict across every request thread. Both read (`get_game`) and write (`put_game`) operations are protected by a `threading.Lock` so concurrent requests cannot interleave and corrupt state. The weather cache uses a separate lock for the same reason. Per-game locking — serialising multiple simultaneous moves on the *same* game — would be the next step for higher concurrency.
 
-### Data storage — two layers
+### Minigame integrity
 
-The app has two separate storage layers with different lifecycles.
+Minigame rewards are **applied on the server only**. The browser runs the visual game and reports `true` or `false`; the server decides what, if anything, to award. Two layers of protection prevent cheating:
 
-**Layer 1 — Active game session (RAM)**
+1. **Strict input validation** — the `success` field must be a real JSON boolean. Strings, integers, or missing fields are rejected with `400`. This matters because Python's `bool("no")` evaluates to `True`, so a loose type cast would silently accept strings.
 
-Created the moment you click Start Voyage; lives in the `_games` Python dict in `server/game/state.py`.
+2. **State guards** — before applying any reward, the server checks that the game is still in progress, that a minigame was actually offered this turn, and that the POST matches the correct minigame type. A request that fails any check gets a no-op response and leaves state unchanged.
 
-```
-Player clicks Start    →  POST /api/games                         →  _games["abc-123"] = { cash, morale, … }
-Player takes a turn    →  POST /api/games/abc-123/moves           →  _games["abc-123"] updated in RAM
-Player resolves event  →  POST /api/games/abc-123/events/choices  →  _games["abc-123"] updated in RAM
-```
+### Bonus narrative
 
-This layer is **purely in-memory**. It is destroyed the instant the server process stops — whether from a crash, a redeploy, or Heroku's automatic 24-hour dyno restart. The browser error "This game no longer exists on the server" means this dict entry is gone.
+After a minigame resolves, the game produces a message that ties the player's most recent story choice to the outcome. This uses a three-level fallback:
 
-**Layer 2 — Saved game (disk)**
+1. **Bespoke prose** — for high-drama combinations (e.g. declining a VC pitch and then winning the mining sprint), a hand-written sentence captures the irony. These are stored as a lookup table keyed by event + choice.
+2. **Label bridge** — if no hand-written entry exists, the player's choice label is prepended to the standard outcome message: *After "Pay for rush shipping": Bonus WON — ...*
+3. **Bare default** — if there is no event context at all, the plain mechanical result is returned.
 
-Written only when the player explicitly clicks Save Progress. Stored as `games/<slug>.json` on the server's filesystem.
+Every combination produces a valid message. Higher levels just produce more meaning.
 
-```
-Player clicks Save   →  PUT  /api/games/abc-123/saves   →  games/my_save.json written to disk
-Player loads a save  →  POST /api/games/restore-save    →  reads games/my_save.json → back into _games
-```
+### Key design decisions
 
-This layer survives a browser tab close or a new session — **but only on localhost**. On Heroku, the filesystem is also ephemeral: every dyno restart wipes the disk just like RAM, so saved files disappear at the same time as active sessions.
-
-**Summary**
-
-| | Layer 1 (active) | Layer 2 (saved) |
-|---|---|---|
-| Storage | RAM (`_games` dict) | Disk (`games/*.json`) |
-| Created | `POST /api/games` | `PUT /api/games/<id>/saves` |
-| Survives tab close | No | Yes (localhost only) |
-| Survives Heroku dyno restart | **No** | **No** (ephemeral filesystem) |
-| Survives `flask run` restart on localhost | No | **Yes** |
-
-**Production upgrade path:** replace `get_game` / `put_game` in `server/game/state.py` with Redis (active sessions survive restarts, work across multiple dynos), and replace the `games/*.json` file I/O in `server/routes/game.py` with PostgreSQL `UPSERT` calls (durable saves, queryable leaderboards, user accounts). The rest of the app does not need to change because all storage access is isolated to those two files.
-
-### Tradeoffs
-
-- **Single active session in memory** keeps the stack small and dependency-free; save/load is file-based JSON for local replayability without a database. On Heroku both layers are ephemeral — a dyno restart wipes RAM and disk together. The designed upgrade path is Redis for active sessions and PostgreSQL for saves.
-- **Win condition checked before lose condition** in `loop.py` — if a player reaches San Francisco while simultaneously hitting a resource threshold (e.g. $0 cash on the final travel), the win fires and the game ends correctly. Checking lose first would produce a frustrating false loss on the winning turn.
-- **Arrival events are skipped on the final hop into San Francisco** so the player gets a clean win state instead of a blocking event modal after victory.
-- **Full state in every response** produces slightly larger payloads but keeps the client trivial — it re-renders from the JSON snapshot rather than maintaining its own derived state.
-- **`rng` injection on all randomised functions** (`pick_event`, `_apply_choice_outcome`, `action_pitch_vc`, `resolve_event_turn`) means tests can pass a seeded `random.Random(42)` or a controlled `Mock` for fully deterministic assertions, without monkey-patching the global `random` module.
-- **Rate limiting — two separate concerns.** The outbound side (my server calling Open-Meteo) is handled: successful responses are cached server-wide for 5 minutes so repeated turns don't hammer the API, and any error including `429 Too Many Requests` falls back to mock data without poisoning the cache. The inbound side (protecting my server from abusive clients) is not implemented — for a real production deployment I'd add `flask-limiter` with per-IP throttling on the `/moves` endpoint, keyed by `game_id` so one player can't degrade another's session. For a single-player demo with human-speed interaction it's not a practical risk, but it's the first thing I'd add before opening the app to anonymous traffic.
+- **The server owns all game state.** The browser never calculates rewards or advances the game on its own — it sends an action and re-renders from whatever the server returns. This makes cheating structurally difficult and keeps the client trivially simple.
+- **Every response returns the full state.** Rather than sending a diff, the server always returns a complete snapshot. The client never has to merge, track deltas, or risk falling out of sync.
+- **The game is designed to never crash on external failures.** Weather API calls always have a fallback. Routes always return structured error JSON. No unhandled exception reaches the browser.
+- **Win takes priority over lose.** Reaching San Francisco on a turn where resources also hit a threshold counts as a win, not a loss — the destination is the goal.
+- **No arrival event fires on the final city.** San Francisco triggers the win screen immediately, not another decision modal.
+- **All randomness is testable without changing production code.** Functions that use random values accept an injectable source, so tests can control outcomes precisely without patching global state.
 
 ## Future Improvements — Systems Thinking at Scale
 
-The current app is intentionally scoped for a single-server demo: clean, correct, and deployable. The limitations below are known tradeoffs, not oversights — each one has a clear upgrade path when the use case demands it.
+The current app is intentionally scoped for a single-server demo: clean, quick, and deployable. The limitations below are known tradeoffs, not oversights, each one has a clear upgrade path when the use case demands it in the future.
 
-**Scale** — Active sessions live in a process-level Python dict. This breaks the moment you add a second server or worker, since each process has its own copy and requests for the same game land on different instances randomly. The fix is Redis: a shared key-value store that all workers read from and write to. The storage boundary is already cleanly isolated to two functions, so the rest of the app wouldn't change.
+**Scale** — The app is currently single-server by design: all active sessions live in one process's memory, so adding a second server or worker would split that state and break the game. Moving session storage to Redis — a shared, external key-value store — decouples state from any individual server instance, making horizontal scaling straightforward without changing the game logic.
 
-**Reliability** — Heroku restarts servers periodically and wipes both RAM and disk when it does. Redis solves the active session layer; PostgreSQL solves the save file layer. Together they make all player data durable across restarts and redeployments.
+**Reliability** — In-memory state and on-disk save files are both wiped on every server restart. Durability requires moving each layer to a purpose-built store: Redis for active sessions (fast reads/writes, configurable TTL) and PostgreSQL for save files (durable, queryable, survives restarts). This separation also matches each store to what it's good at rather than using one solution for both.
 
-**Consistency** — A dict-level lock prevents data corruption but doesn't fully serialise game logic: two near-simultaneous requests for the same game could both read the same snapshot and one write silently overwrites the other. The next step is a per-game lock so requests for the same game queue behind each other. With Redis, this becomes a distributed lock that holds the guarantee across multiple servers.
+**Consistency** — The current lock prevents two threads from corrupting the shared games dict, but it doesn't prevent a race on a single game: two simultaneous moves could both read the same state snapshot, and whichever write lands second silently discards the first. The fix is optimistic concurrency control, by stamping each state with a version number and rejecting writes that are based on a stale version, so the second request retries on fresh state rather than overwriting it.
 
-**Security** — Full event data, including the resource consequences of each choice, is currently visible in the state the server sends back to the browser. A determined player could read this and make "informed" choices. The fix is to send only display labels to the client and look up the full effect data on the server when a choice is submitted — the same server-authoritative pattern already applied to minigames.
+**Security** — Right now, when an event appears, the server sends the full event object to the browser, including the exact resource effects of every choice. A player who inspects the network response can see what each option does before choosing. This is fine for a demo, but a production version would send only the display text and resolve the effects server-side when a choice is submitted, so the outcome data is never exposed.
 
 **Observability** — Errors in weather fetches are silently swallowed by the fallback. A production version would log every caught exception with enough context to diagnose it, add a health-check endpoint so a monitor can verify the server is alive, and emit structured request logs that feed into a dashboard or alerting system.
+
+**Inbound rate limiting** — There is currently no throttling on incoming requests. Any client can hit the API as fast as they want. Since the app has no user accounts, the natural key is IP address. Adding per-IP throttling on the moves endpoint would be the first step before opening the app to anonymous traffic.
 
 **Content and stretch features** — Once persistence moves to a real database, a range of gameplay expansions become straightforward:
 
@@ -353,4 +253,4 @@ This project was built in active collaboration with an AI coding assistant (Curs
 Using AI as a collaborator on a take-home is something I'd do on the job too, the way an engineer uses Stack Overflow, a rubber duck, or a code reviewer. The skill being demonstrated is "can you make good architectural decisions, catch bugs before they ship, write clear documentation, and know what quality looks like." I used AI to move faster on the parts where speed was appropriate, and slower, asking more questions, reading more carefully, and on the parts where understanding mattered most.
 
 ## Special Note
-Claire: "My GitHub repo currently shows only a few commits because I had to fix a nested Git repository issue midway through the project. My server/ folder had accidentally been initialized as its own separate Git repo, which meant commits were tracked there instead of at the project root — so client/, tests/, and requirements.txt were never being committed to GitHub at all. To fix the structure properly I removed the nested repo, re-initialized Git at the correct project root, and force-pushed. That reset the commit history, but the codebase itself is complete and unchanged. I'm happy to walk through any part of the code, the design decisions, or the bug fixes I made. Thank you! "
+Claire: "My GitHub repo currently shows only small portions of the total commits I've made, because I had to fix a nested Git repository issue midway through the project. My server/ folder had accidentally been initialized as its own separate Git repo, which meant commits were tracked there instead of at the project root — so client/, tests/, and requirements.txt were never being committed to GitHub at all. To fix the structure properly I removed the nested repo, re-initialized Git at the correct project root, and force-pushed. That reset the commit history, but the codebase itself is complete and unchanged. I'm happy to walk through any part of the code, the design decisions, or the bug fixes I made. Thank you! "
