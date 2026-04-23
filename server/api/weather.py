@@ -152,7 +152,7 @@ def fetch_all_weather(locations: List[Dict[str, str]]) -> Dict[str, Dict[str, An
                 out[city] = dict(WEATHER_FALLBACK.get(city, WEATHER_FALLBACK["San Jose"]))
     return out
 
-# write one city into state
+
 def refresh_city_in_state(state: Dict[str, Any], city: str) -> None:
     """Replace one cache entry (Open-Meteo live, unless WEATHER_OFFLINE or request fails)."""
     state.setdefault("weather_cache", {})
