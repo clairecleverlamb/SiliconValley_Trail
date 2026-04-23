@@ -223,9 +223,36 @@ if label:                   return f'After "{label}": {default}'   # Level 2
 
 **Why data/logic separation matters here:** `_NARRATIVES` stores only the unique one-sentence prose per combination — no boilerplate. `_build_message` generates "Bonus WON/LOST", resource formatting, and spacing once. Changing how resource changes are displayed means editing one function, not hunting through a large data dict. Adding new story content means adding one prose sentence, not copy-pasting a full template block.
 
-### Error handling and fallback
+### Error handling, rate limits, and weather caching
 
-All outbound weather calls sit in `try`/`except`; any failure or rate limit falls back to the static `WEATHER_FALLBACK` map so the game never crashes on network issues. The fallback also uses `.get(city, WEATHER_FALLBACK["San Jose"])` (not direct subscript) so an unknown city name — from a typo or a future expansion — never raises a `KeyError` in offline mode.
+**Network failures and HTTP errors**
+
+All Open-Meteo calls are wrapped in `try`/`except`. Any error — `ConnectionError`, timeout, malformed JSON, or an HTTP error status — is caught and the function returns the static `WEATHER_FALLBACK` for that city instead. The game never crashes or blocks on weather availability. The fallback uses `.get(city, WEATHER_FALLBACK["San Jose"])` (never a bare subscript) so an unknown city name never raises a `KeyError`.
+
+**Rate limit handling — server-level TTL cache**
+
+Open-Meteo is a free, keyless API with fair-use rate limits. Without caching, every game turn (`refresh_city_in_state` is called after travel, non-travel actions, and event resolutions) would make a live HTTP request. One 20-turn game = 20+ API calls; multiply by concurrent players and this hits rate limits quickly.
+
+The solution is a **server-wide TTL cache** in `server/api/weather.py`:
+
+```
+First request for "Mountain View"  →  live API call  →  cached for 5 minutes
+All subsequent requests within TTL  →  served from _server_weather_cache (no API call)
+429 / any error during fetch        →  WEATHER_FALLBACK returned, cache NOT poisoned
+                                       (next fresh request will retry the live API)
+```
+
+Key design decisions:
+- **5-minute TTL** (`_CACHE_TTL_SECONDS = 300`): weather doesn't change meaningfully between turns; 5 minutes balances freshness against API load.
+- **Cache is shared across all players/games** in the process: a city fetched for one player's turn is reused for all others — the benefit scales with traffic.
+- **Only successful responses are cached**: errors fall back silently and do not write to the cache, so a transient 429 or network blip doesn't freeze weather data for 5 minutes.
+- **`threading.Lock`** guards the cache dict so concurrent requests for the same city don't trigger duplicate live fetches.
+
+**HTTP 429 (Too Many Requests) specifically:** `res.raise_for_status()` raises a `requests.HTTPError` for any 4xx/5xx response, which is caught by `except Exception` and triggers the fallback. The cache prevents the burst of requests that would cause a 429 in the first place.
+
+**Production upgrade path:** replace `_server_weather_cache` with a Redis key with a TTL (`SETEX city_name 300 data`). This makes the cache durable across dyno restarts and shared across multiple dynos — the same `fetch_weather` interface, just backed by Redis instead of a process-local dict.
+
+**API inputs and route errors**
 
 Route handlers return structured `{"error": "..."}` JSON for all error cases. Status codes follow the client-vs-server fault model described in the HTTP status codes section above — never raw stack traces to the browser.
 
@@ -279,14 +306,28 @@ This layer survives a browser tab close or a new session — **but only on local
 - **Arrival events are skipped on the final hop into San Francisco** so the player gets a clean win state instead of a blocking event modal after victory.
 - **Full state in every response** produces slightly larger payloads but keeps the client trivial — it re-renders from the JSON snapshot rather than maintaining its own derived state.
 - **`rng` injection on all randomised functions** (`pick_event`, `_apply_choice_outcome`, `action_pitch_vc`, `resolve_event_turn`) means tests can pass a seeded `random.Random(42)` or a controlled `Mock` for fully deterministic assertions, without monkey-patching the global `random` module.
+- **Rate limiting — two separate concerns.** The outbound side (my server calling Open-Meteo) is handled: successful responses are cached server-wide for 5 minutes so repeated turns don't hammer the API, and any error including `429 Too Many Requests` falls back to mock data without poisoning the cache. The inbound side (protecting my server from abusive clients) is not implemented — for a real production deployment I'd add `flask-limiter` with per-IP throttling on the `/moves` endpoint, keyed by `game_id` so one player can't degrade another's session. For a single-player demo with human-speed interaction it's not a practical risk, but it's the first thing I'd add before opening the app to anonymous traffic.
 
-### If I had more time
+## Future Improvements — Systems Thinking at Scale
 
-- User accounts with persistent ownership of multiple saved games (current save system is anonymous, file-per-game).
-- Event choices stripped to labels for the client while keeping effects server-only (currently full event data including effects is sent to the browser, which a client could read).
-- Stronger narrative variety + achievement tracking tied to run outcomes.
-- Per-game locking on top of the current dict-level lock, for stricter concurrency safety if two requests for the same game arrive simultaneously.
-- Structured logging and `/healthz` endpoint if this were a production service.
+The current app is intentionally scoped for a single-server demo: clean, correct, and deployable. The limitations below are known tradeoffs, not oversights — each one has a clear upgrade path when the use case demands it.
+
+**Scale** — Active sessions live in a process-level Python dict. This breaks the moment you add a second server or worker, since each process has its own copy and requests for the same game land on different instances randomly. The fix is Redis: a shared key-value store that all workers read from and write to. The storage boundary is already cleanly isolated to two functions, so the rest of the app wouldn't change.
+
+**Reliability** — Heroku restarts servers periodically and wipes both RAM and disk when it does. Redis solves the active session layer; PostgreSQL solves the save file layer. Together they make all player data durable across restarts and redeployments.
+
+**Consistency** — A dict-level lock prevents data corruption but doesn't fully serialise game logic: two near-simultaneous requests for the same game could both read the same snapshot and one write silently overwrites the other. The next step is a per-game lock so requests for the same game queue behind each other. With Redis, this becomes a distributed lock that holds the guarantee across multiple servers.
+
+**Security** — Full event data, including the resource consequences of each choice, is currently visible in the state the server sends back to the browser. A determined player could read this and make "informed" choices. The fix is to send only display labels to the client and look up the full effect data on the server when a choice is submitted — the same server-authoritative pattern already applied to minigames.
+
+**Observability** — Errors in weather fetches are silently swallowed by the fallback. A production version would log every caught exception with enough context to diagnose it, add a health-check endpoint so a monitor can verify the server is alive, and emit structured request logs that feed into a dashboard or alerting system.
+
+**Content and stretch features** — Once persistence moves to a real database, a range of gameplay expansions become straightforward:
+
+- **More minigames** — the dispatch system is already modular; a new minigame is one new endpoint and one new client screen with no changes to the core game loop.
+- **User profiles, leaderboards, and DMs** — persistent identity unlocks social features. A leaderboard is a simple query on run outcomes; direct messages between travelers are a small messages table.
+- **Multiplayer / network version** — multiple travelers on the same trail whose decisions affect each other. Players could see each other's resource state in real time, trade, or compete. Social dynamics — cooperation vs. sabotage — emerge naturally from shared state. Real-time updates would use WebSockets or long-polling so each player is notified when it's their turn.
+- **Event memory system** — track which events a player has already seen and deprioritise repeats, so longer runs feel fresh. A richer version could unlock follow-up events based on past choices, turning individual events into branching story threads.
 
 ## AI usage in development
 
