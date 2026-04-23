@@ -267,7 +267,26 @@ This layer survives a browser tab close or a new session — **but only on local
 
 ## AI usage in development
 
-Parts of this repository (file layout, docs, and some implementation scaffolding) were drafted with assistance from an AI coding tool, then reviewed, wired together, and tested by a human developer. Game balance, tests, and all bug fixes were verified locally with `pytest`.
+This project was built in active collaboration with an AI coding assistant (Cursor / Claude). I want to be transparent and specific about what that collaboration looked like, because I think *how* I used AI is as meaningful as *what* I built.
+
+**What the AI helped with**
+
+- **Frontend scaffolding** — The initial HTML structure, CSS layout, and JavaScript fetch wiring in `client/` were drafted with AI assistance. I directed the interaction model (single-page, server-authoritative state, modal flow for events and minigames) and reviewed every output against the API contract I had designed.
+- **Documentation** — The README structure, section framing, and much of the prose were drafted collaboratively. I provided the design decisions; the AI helped articulate them clearly and consistently. Every technical claim was cross-checked against the actual code before committing.
+- **Bug identification and fixes** — I ran a systematic code-analysis pass and brought the findings to the AI one by one. Together we diagnosed and fixed: incorrect `Path().parent` chains, a `KeyError` in offline weather fallback, missing thread safety on `_games`, wrong HTTP status codes (`400` where `404`/`409`/`500` belonged), a win/lose condition ordering bug, a day-counter off-by-one on losing turns, and redundant inline clamping in action handlers.
+- **Refactoring for quality** — The `bonus_narrative.py` data/logic separation, the `rng` injection pattern for testable randomness, the extraction of magic numbers into named constants (`BONUS_MINIGAME_CHANCE`, `P_WEATHER_EVENT_ROUGH`, `STARTING_CASH`, etc.), and the strict boolean validation on minigame endpoints were all improvements I worked through with AI assistance.
+
+**What I owned and drove**
+
+- **All game design decisions** — the trail cities, resource types, win/lose thresholds, event content, minigame mechanics, bonus pity rules, and narrative writing are mine.
+- **The architecture** — server-authoritative state, REST-ish API shape, the two-layer storage model, the decision to use Flask + vanilla JS, the choice of Open-Meteo. I explained these to the AI, not the other way around.
+- **Understanding every change** — I did not merge anything I could not explain. When a fix was non-obvious (e.g. why `check_win` must run before `check_lose`, why `isinstance(x, bool)` is stricter than `bool(x)`, why `rng` injection is better than monkeypatching), I asked until I understood it, then kept the explanation in comments or docs.
+- **Test verification** — every `pytest` run was executed and interpreted by me. When tests failed after a refactor, I diagnosed the failure before applying a fix.
+- **Integration and judgment** — AI suggestions were starting points. Several were pushed back on, refined, or rejected. The final shape of every file reflects my judgment about what belongs in a production-quality take-home project.
+
+**The honest framing**
+
+Using AI as a collaborator on a take-home is something I'd do on the job too, the way an engineer uses Stack Overflow, a rubber duck, or a code reviewer. The skill being demonstrated is "can you make good architectural decisions, catch bugs before they ship, write clear documentation, and know what quality looks like." I used AI to move faster on the parts where speed was appropriate, and slower, asking more questions, reading more carefully, and on the parts where understanding mattered most.
 
 ## Special Note
 Claire: "My GitHub repo currently shows only a few commits because I had to fix a nested Git repository issue midway through the project. My server/ folder had accidentally been initialized as its own separate Git repo, which meant commits were tracked there instead of at the project root — so client/, tests/, and requirements.txt were never being committed to GitHub at all. To fix the structure properly I removed the nested repo, re-initialized Git at the correct project root, and force-pushed. That reset the commit history, but the codebase itself is complete and unchanged. I'm happy to walk through any part of the code, the design decisions, or the bug fixes I made. Thank you! "
