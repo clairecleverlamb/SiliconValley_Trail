@@ -1,17 +1,41 @@
-"""Open-Meteo fetch (no API key), cache, and travel modifiers.
+"""Open-Meteo fetch (no API key), server-level TTL cache, and travel modifiers.
 
 See https://open-meteo.com/
+
+Rate-limit strategy
+-------------------
+Open-Meteo is a free, keyless API with fair-use rate limits. To stay well within
+those limits and avoid hammering the API on every game turn, every successful
+response is cached server-wide for _CACHE_TTL_SECONDS (5 minutes). Cache entries
+are keyed by city name and guarded by a threading.Lock so concurrent requests
+for the same city don't produce duplicate live fetches.
+
+If the API returns a 429 (Too Many Requests) or any other error, the code falls
+back to WEATHER_FALLBACK mock data — play always continues. The cache naturally
+absorbs bursts: a city fetched for one player's game is reused for all other
+players within the TTL window.
+
+Production upgrade path: replace the in-process dict with Redis (shared across
+dynos, configurable TTL, survives restarts).
 """
 
 from __future__ import annotations
 
 import os
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Tuple
 
 import requests
 
 OPEN_METEO_FORECAST = "https://api.open-meteo.com/v1/forecast"
+
+# Server-level weather cache — shared across all games/players in the process.
+# Tuple value is (weather_dict, monotonic_timestamp_of_fetch).
+_CACHE_TTL_SECONDS = 300  # 5 minutes: fine-grained enough for gameplay, coarse enough to spare the API
+_server_weather_cache: Dict[str, Tuple[Dict[str, Any], float]] = {}
+_cache_lock = threading.Lock()
 
 # Peninsula cities → coordinates for Open-Meteo (lat, lon).
 CITY_COORDS: Dict[str, Tuple[float, float]] = {
@@ -65,13 +89,25 @@ def _wmo_code_to_condition(code: int) -> str:
 
 
 def fetch_weather(city: str) -> Dict[str, Any]:
-    """Live forecast from Open-Meteo, or WEATHER_FALLBACK on error / unknown city / offline mode."""
+    """Live forecast from Open-Meteo, or WEATHER_FALLBACK on error / unknown city / offline mode.
+
+    Successful responses are cached server-wide for _CACHE_TTL_SECONDS to stay within
+    Open-Meteo fair-use rate limits and avoid a round-trip on every game turn.
+    Errors (including HTTP 429 Too Many Requests) always fall back to WEATHER_FALLBACK
+    so the game never blocks on weather availability.
+    """
     if os.getenv("WEATHER_OFFLINE", "").strip() in ("1", "true", "yes"):
         return dict(WEATHER_FALLBACK.get(city, WEATHER_FALLBACK["San Jose"]))
 
     coords = CITY_COORDS.get(city)
     if not coords:
         return dict(WEATHER_FALLBACK.get(city, WEATHER_FALLBACK["San Jose"]))
+
+    # Return cached entry if still fresh.
+    with _cache_lock:
+        cached = _server_weather_cache.get(city)
+        if cached and (time.monotonic() - cached[1]) < _CACHE_TTL_SECONDS:
+            return dict(cached[0])
 
     lat, lon = coords
     try:
@@ -85,16 +121,16 @@ def fetch_weather(city: str) -> Dict[str, Any]:
             },
             timeout=5,
         )
-        res.raise_for_status() # raise an exception if the request is not successful
-        data = res.json() # convert the response to a JSON object
-        cur = data.get("current") or {} 
+        res.raise_for_status()
+        data = res.json()
+        cur = data.get("current") or {}
         code = int(cur.get("weather_code", 3))
-        temp_raw = cur.get("temperature_2m", 70) #
-        temp = int(round(float(temp_raw)))
-        return {
-            "condition": _wmo_code_to_condition(code),
-            "temp": temp,
-        }
+        temp = int(round(float(cur.get("temperature_2m", 70))))
+        result = {"condition": _wmo_code_to_condition(code), "temp": temp}
+        # Only cache successful live responses; errors fall back without poisoning the cache.
+        with _cache_lock:
+            _server_weather_cache[city] = (result, time.monotonic())
+        return dict(result)
     except Exception:
         return dict(WEATHER_FALLBACK.get(city, WEATHER_FALLBACK["San Jose"]))
 
