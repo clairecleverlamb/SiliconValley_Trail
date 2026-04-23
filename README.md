@@ -4,14 +4,14 @@ A replayable, Oregon Trail–style survival game for a scrappy startup driving f
 
 ---
 
-| | |
-|---|---|
-| **Source Code** | [github.com/clairecleverlamb/SiliconValley_Trail](https://github.com/clairecleverlamb/SiliconValley_Trail) |
-| **Live App** | [siliconvalleytrail-0a70c4621c3e.herokuapp.com](https://siliconvalleytrail-0a70c4621c3e.herokuapp.com/) |
-| **Demo Video** | [youtu.be/0FNCjyeTJsQ](https://youtu.be/0FNCjyeTJsQ) |
-| **Trello Board** | [trello.com/b/ywkWAan0/silicon-valley-trail](https://trello.com/b/ywkWAan0/silicon-valley-trail) |
-| **Design Notes** | [Google Doc](https://docs.google.com/document/d/1R2eA5L-KQ59NZut7s5cs9GnEsiwRfGLMpWYfgsh1hNQ/edit?tab=t.0) |
-| **Test Tracker** | [Google Sheets](https://docs.google.com/spreadsheets/d/1Ze7bkQS1GjRClXzMj7oVHJIh56OzV7ZNF-kzHdV8vNc/edit?gid=0#gid=0) |
+<table>
+<tr><td><strong>Source Code</strong></td><td><a href="https://github.com/clairecleverlamb/SiliconValley_Trail" target="_blank" rel="noopener noreferrer">github.com/clairecleverlamb/SiliconValley_Trail</a></td></tr>
+<tr><td><strong>Live App</strong></td><td><a href="https://siliconvalleytrail-0a70c4621c3e.herokuapp.com/" target="_blank" rel="noopener noreferrer">siliconvalleytrail-0a70c4621c3e.herokuapp.com</a></td></tr>
+<tr><td><strong>Demo Video</strong></td><td><a href="https://youtu.be/0FNCjyeTJsQ" target="_blank" rel="noopener noreferrer">youtu.be/0FNCjyeTJsQ</a></td></tr>
+<tr><td><strong>Trello Board</strong></td><td><a href="https://trello.com/b/ywkWAan0/silicon-valley-trail" target="_blank" rel="noopener noreferrer">trello.com/b/ywkWAan0/silicon-valley-trail</a></td></tr>
+<tr><td><strong>Design Notes</strong></td><td><a href="https://docs.google.com/document/d/1R2eA5L-KQ59NZut7s5cs9GnEsiwRfGLMpWYfgsh1hNQ/edit?tab=t.0" target="_blank" rel="noopener noreferrer">Google Doc</a></td></tr>
+<tr><td><strong>Test Tracker</strong></td><td><a href="https://docs.google.com/spreadsheets/d/1Ze7bkQS1GjRClXzMj7oVHJIh56OzV7ZNF-kzHdV8vNc/edit?gid=0#gid=0" target="_blank" rel="noopener noreferrer">Google Sheets</a></td></tr>
+</table>
 
 ---
 
