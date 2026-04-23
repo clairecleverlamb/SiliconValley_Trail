@@ -30,4 +30,4 @@ def index():
 
 if __name__ == "__main__":
     import os
-    app.run(debug=os.getenv("FLASK_DEBUG", "0") == "1", port=5000) # if FLASK_DEBUG is set to 1, then the app will run in debug mode  
+    app.run(debug=os.getenv("FLASK_DEBUG", "0") == "1", port=int(os.getenv("PORT", 5000)))
