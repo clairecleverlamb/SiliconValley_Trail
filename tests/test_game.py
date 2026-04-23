@@ -253,17 +253,18 @@ def test_bonus_narrative_vc_pitch_decline_polite_mining():
 
 
 def test_bonus_narrative_generic_fallback_uses_choice_label():
+    # Use an event+choice that has no layered entry so the generic fallback runs.
     st = create_initial_state("test-fallback", _clear_cache())
     st["mining_eligible"] = True
     st["minigame_type"] = "mining"
     st["last_event_choice"] = {
-        "event_id": "vc_pitch",
-        "choice_label": "Pitch unprepared",
+        "event_id": "google_food",
+        "choice_label": "Feast",
         "choice_index": 1,
-        "outcome_line": "Bold move...",
+        "outcome_line": "Team is energized!",
     }
     st2, msg = game_minigames.apply_mining_result(st, True)
-    assert "Pitch unprepared" in msg
+    assert "Feast" in msg
     assert "bonus won" in msg.lower()
     assert "mining haul" in msg.lower() or "cash" in msg.lower()
     assert st2["mining_eligible"] is False
