@@ -24,8 +24,11 @@ LOG_MAX = 10
 # Calendar days in which to reach San Francisco; each action (rest, travel, etc.) uses one day.
 MAX_JOURNEY_DAYS = 20
 
+# Starting cash for every new run.
+STARTING_CASH = 20_000
+
 # Cash charged every turn after your action (and during events): rent, payroll, burn rate.
-# Scaled for short runway + $20k start (see DAILY_OVERHEAD_CASH).
+# Scaled for short runway + $20k start (see STARTING_CASH).
 DAILY_OVERHEAD_CASH = 320
 
 # Lose when bug count exceeds this (strictly more than — i.e. game over at 21+ bugs).
@@ -59,7 +62,7 @@ def create_initial_state(game_id: str, weather_cache: Dict[str, Dict[str, Any]])
         "lost_reason": None,
         "current_location_index": 0,
         "resources": {
-            "cash": 20000,
+            "cash": STARTING_CASH,
             "morale": 75,
             "coffee": 28,
             "hype": 40,

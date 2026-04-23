@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import copy
+import random
+from unittest.mock import Mock
 
 from api import weather as weather_api
 from app import app as flask_app
@@ -12,7 +14,7 @@ from game import minigames as game_minigames
 from game import state as game_state
 from game.conditions import check_lose
 from game.events import LOCATION_EVENTS, resolve_event_choice
-from game.state import DAILY_OVERHEAD_CASH, create_initial_state
+from game.state import DAILY_OVERHEAD_CASH, STARTING_CASH, create_initial_state
 
 
 def _clear_cache():
@@ -22,28 +24,26 @@ def _clear_cache():
 
 def test_travel_decreases_cash_and_advances():
     st = create_initial_state("test-travel", _clear_cache())
-    st["resources"]["cash"] = 50000
     loop.resolve_turn(st, "travel")
     assert st["current_location_index"] == 1
     # Travel cost + daily overhead (Clear weather: small morale bump, no extra cash hit).
-    assert st["resources"]["cash"] == 50000 - 1500 - DAILY_OVERHEAD_CASH
+    assert st["resources"]["cash"] == STARTING_CASH - 1500 - DAILY_OVERHEAD_CASH
 
 
 def test_travel_cloudy_applies_weather_penalty():
     """Cloudy / Clouds must hit travel rules (previously unmatched, so weather felt absent)."""
     st = create_initial_state("test-cloud", _clear_cache())
-    st["resources"]["cash"] = 50000
     st["weather_cache"]["Santa Clara"] = {"condition": "Cloudy", "temp": 68}
     loop.resolve_turn(st, "travel")
     assert st["current_location_index"] == 1
-    assert st["resources"]["cash"] == 50000 - 1500 - 200 - DAILY_OVERHEAD_CASH
+    assert st["resources"]["cash"] == STARTING_CASH - 1500 - 200 - DAILY_OVERHEAD_CASH
 
 
 def test_travel_weather_type_changes_action_travel_result():
     """Same base travel; destination forecast alone must change resources and the weather line."""
     base = create_initial_state("test-weather-diff", _clear_cache())
     base["resources"] = {
-        "cash": 50000,
+        "cash": STARTING_CASH,
         "morale": 75,
         "coffee": 28,
         "hype": 40,
@@ -58,8 +58,8 @@ def test_travel_weather_type_changes_action_travel_result():
     msg_rain = actions.action_travel(st_rain)
 
     # apply_weather_modifiers: clear → +5 morale; rain → -500 cash, -5 morale (vs no weather cash hit for clear).
-    assert st_clear["resources"]["cash"] == 50000 - 1500
-    assert st_rain["resources"]["cash"] == 50000 - 1500 - 500
+    assert st_clear["resources"]["cash"] == STARTING_CASH - 1500
+    assert st_rain["resources"]["cash"] == STARTING_CASH - 1500 - 500
     assert st_clear["resources"]["morale"] == 75 - 5 + 5
     assert st_rain["resources"]["morale"] == 75 - 5 - 5
     assert st_clear["resources"] != st_rain["resources"]
@@ -169,55 +169,61 @@ def test_event_effects_modify_resources():
     assert st["resources"] != before
 
 
-def test_event_turn_may_offer_bonus_minigame(monkeypatch):
-    monkeypatch.setattr("game.loop.random.random", lambda: 0.1)
+def test_event_turn_may_offer_bonus_minigame():
+    rng = Mock()
+    rng.random.return_value = 0.1  # below BONUS_MINIGAME_CHANCE (0.55) → bonus offered
+    rng.choice.side_effect = random.choice
     st = create_initial_state("test-bonus", _clear_cache())
     st["first_event_bonus_pending"] = False
     ev = copy.deepcopy(LOCATION_EVENTS["Mountain View"][0])
     st["current_event"] = ev
-    loop.resolve_event_turn(st, 1)
+    loop.resolve_event_turn(st, 1, rng=rng)
     assert st["mining_eligible"] is True
     assert st["minigame_type"] in ("mining", "typing", "coffee_hunt")
 
 
-def test_event_turn_skips_bonus_when_roll_high(monkeypatch):
-    monkeypatch.setattr("game.loop.random.random", lambda: 0.99)
+def test_event_turn_skips_bonus_when_roll_high():
+    rng = Mock()
+    rng.random.return_value = 0.99  # above BONUS_MINIGAME_CHANCE (0.55) → bonus skipped
     st = create_initial_state("test-bonus-skip", _clear_cache())
     st["first_event_bonus_pending"] = False
     ev = copy.deepcopy(LOCATION_EVENTS["Mountain View"][0])
     st["current_event"] = ev
-    loop.resolve_event_turn(st, 1)
+    loop.resolve_event_turn(st, 1, rng=rng)
     assert st["mining_eligible"] is False
     assert st["minigame_type"] is None
     assert st["events_since_bonus"] == 1
 
 
-def test_first_resolved_event_always_offers_bonus(monkeypatch):
+def test_first_resolved_event_always_offers_bonus():
     """New runs guarantee a minigame on the first event choice (even if RNG is bad)."""
-    monkeypatch.setattr("game.loop.random.random", lambda: 0.99)
+    rng = Mock()
+    rng.random.return_value = 0.99  # would normally skip — force_bonus overrides it
+    rng.choice.side_effect = random.choice
     st = create_initial_state("test-first-bonus", _clear_cache())
     assert st["first_event_bonus_pending"] is True
     ev = copy.deepcopy(LOCATION_EVENTS["Mountain View"][0])
     st["current_event"] = ev
-    loop.resolve_event_turn(st, 1)
+    loop.resolve_event_turn(st, 1, rng=rng)
     assert st["mining_eligible"] is True
     assert st["minigame_type"] in ("mining", "typing", "coffee_hunt")
     assert st["first_event_bonus_pending"] is False
 
 
-def test_bonus_forced_after_two_misses(monkeypatch):
-    monkeypatch.setattr("game.loop.random.random", lambda: 0.99)
+def test_bonus_forced_after_two_misses():
+    rng = Mock()
+    rng.random.return_value = 0.99  # always misses the bonus roll; pity kick in at 2 misses
+    rng.choice.side_effect = random.choice
     st = create_initial_state("test-pity", _clear_cache())
     st["first_event_bonus_pending"] = False
-    st["resources"]["cash"] = 100000
     ev = copy.deepcopy(LOCATION_EVENTS["Mountain View"][0])
     for i in range(2):
         st["current_event"] = copy.deepcopy(ev)
-        loop.resolve_event_turn(st, 1)
+        loop.resolve_event_turn(st, 1, rng=rng)
         assert st["mining_eligible"] is False
         assert st["events_since_bonus"] == i + 1
     st["current_event"] = copy.deepcopy(ev)
-    loop.resolve_event_turn(st, 1)
+    loop.resolve_event_turn(st, 1, rng=rng)
     assert st["mining_eligible"] is True
     assert st["events_since_bonus"] == 0
 

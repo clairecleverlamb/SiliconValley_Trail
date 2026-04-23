@@ -358,28 +358,28 @@ def get_weather_event(weather: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return None
 
 
-def pick_event(location_name: str, weather: Dict[str, Any]) -> Dict[str, Any]:
+def pick_event(location_name: str, weather: Dict[str, Any], rng: Any = random) -> Dict[str, Any]:
     pool = LOCATION_EVENTS.get(location_name)
     if not pool:
         pool = LOCATION_EVENTS["San Jose"]
     bucket = weather_api.condition_bucket(weather.get("condition"))
     p_weather = 0.42 if bucket in ("rain", "fog", "clouds") else 0.24
-    if random.random() < p_weather:
+    if rng.random() < p_weather:
         ev = get_weather_event(weather)
         if ev is not None:
             return ev
-    return copy.deepcopy(random.choice(pool))
+    return copy.deepcopy(rng.choice(pool))
 
 
 def _apply_choice_outcome(
-    state: Dict[str, Any], choice: Dict[str, Any]
+    state: Dict[str, Any], choice: Dict[str, Any], rng: Any = random
 ) -> Tuple[str, Optional[str]]:
     base = choice.get("effects") or {}
     resources.apply_effects(state, base)
     msg = choice.get("outcome", "Resolved.")
     risk = choice.get("risk_chance")
     if risk is not None:
-        roll = random.random()
+        roll = rng.random()
         if roll < float(risk):
             risk_fx = choice.get("risk_effects") or {}
             resources.apply_effects(state, risk_fx)
@@ -392,7 +392,7 @@ def _apply_choice_outcome(
     return msg, None
 
 
-def resolve_event_choice(state: Dict[str, Any], choice_num: int) -> str:
+def resolve_event_choice(state: Dict[str, Any], choice_num: int, rng: Any = random) -> str:
     ev = state.get("current_event")
     if not ev:
         raise ValueError("no_event")
@@ -401,7 +401,7 @@ def resolve_event_choice(state: Dict[str, Any], choice_num: int) -> str:
         raise ValueError("bad_choice")
     choice = choices[choice_num - 1]
     before = resources.resource_snapshot(state)
-    msg, _ = _apply_choice_outcome(state, choice)
+    msg, _ = _apply_choice_outcome(state, choice, rng)
     resources.clamp_resources(state)
     after = resources.resource_snapshot(state)
     delta = resources.format_deltas(resources.delta_snapshots(before, after))

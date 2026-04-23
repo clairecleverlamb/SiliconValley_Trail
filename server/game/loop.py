@@ -27,8 +27,7 @@ def _update_coffee_emergency(state: Dict[str, Any]) -> None:
     else:
         state["coffee_emergency_turns"] = 0
 
-## resolve_turn function, it resolves the turn for the given action
-def resolve_turn(state: Dict[str, Any], action: str) -> Tuple[Dict[str, Any], str]:
+def resolve_turn(state: Dict[str, Any], action: str, rng: Any = random) -> Tuple[Dict[str, Any], str]:
     if state["status"] != "playing":
         return state, "The journey is already over."
 
@@ -43,7 +42,7 @@ def resolve_turn(state: Dict[str, Any], action: str) -> Tuple[Dict[str, Any], st
         raise KeyError("invalid_action")
 
     before = resources.resource_snapshot(state)
-    flavor = actions.run_action(state, action) # this is the action handler, it applies the effects of the action to the state
+    flavor = actions.run_action(state, action, rng)
     resources.clamp_resources(state)
     after_action = resources.resource_snapshot(state)
     action_d = resources.format_deltas(
@@ -69,8 +68,6 @@ def resolve_turn(state: Dict[str, Any], action: str) -> Tuple[Dict[str, Any], st
     _update_coffee_emergency(state)
 
 
-##travel action handler, it updates the current location index and refreshes the weather
-
     if action == "travel":
         new_idx = state["current_location_index"] + 1
         state["current_location_index"] = new_idx
@@ -78,7 +75,7 @@ def resolve_turn(state: Dict[str, Any], action: str) -> Tuple[Dict[str, Any], st
         weather_api.refresh_city_in_state(state, loc)
         if new_idx < 9:
             weather = state.get("weather_cache", {}).get(loc, {})
-            state["current_event"] = game_events.pick_event(loc, weather)
+            state["current_event"] = game_events.pick_event(loc, weather, rng)
             ev = state["current_event"]
             msg = f"{msg} You arrive in {loc}. {ev.get('title', 'Something')} demands a decision."
         else:
@@ -110,12 +107,12 @@ def resolve_turn(state: Dict[str, Any], action: str) -> Tuple[Dict[str, Any], st
         )
     return state, msg
 
-def resolve_event_turn(state: Dict[str, Any], choice: int) -> Tuple[Dict[str, Any], str]:
+def resolve_event_turn(state: Dict[str, Any], choice: int, rng: Any = random) -> Tuple[Dict[str, Any], str]:
     if state["status"] != "playing":
         return state, "The journey is already over."
 
     try:
-        msg = game_events.resolve_event_choice(state, choice)
+        msg = game_events.resolve_event_choice(state, choice, rng)
     except ValueError as e:
         raise ValueError(str(e)) from e
 
@@ -166,12 +163,10 @@ def resolve_event_turn(state: Dict[str, Any], choice: int) -> Tuple[Dict[str, An
     elif int(state.get("events_since_bonus", 0)) >= 2:
         force_bonus = True
 
-    BONUS_MINIGAME_CHANCE = 0.55 
-    if force_bonus or random.random() < BONUS_MINIGAME_CHANCE:
+    BONUS_MINIGAME_CHANCE = 0.55
+    if force_bonus or rng.random() < BONUS_MINIGAME_CHANCE:
         state["mining_eligible"] = True
-        state["minigame_type"] = random.choice(
-            ["mining", "typing", "coffee_hunt"]
-        )
+        state["minigame_type"] = rng.choice(["mining", "typing", "coffee_hunt"])
         state["events_since_bonus"] = 0
     else:
         state["mining_eligible"] = False

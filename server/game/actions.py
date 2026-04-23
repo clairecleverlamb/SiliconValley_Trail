@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import random
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Union
 
 from api import weather as weather_api
 from . import resources
@@ -80,12 +80,12 @@ def action_hackathon(state: Dict[str, Any]) -> str:
     )
 
 
-def action_pitch_vc(state: Dict[str, Any]) -> str:
+def action_pitch_vc(state: Dict[str, Any], rng: Any = random) -> str:
     i = _idx(state)
     loc = game_state.LOCATIONS[min(i, len(game_state.LOCATIONS) - 1)]["name"]
     before = resources.resource_snapshot(state)
     r = state["resources"]
-    if random.random() < 0.6:
+    if rng.random() < 0.6:
         r["cash"] += 15000
         r["hype"] += 20
         resources.clamp_resources(state)
@@ -142,7 +142,9 @@ ACTIONS: Dict[str, ActionFn] = {
 }
 
 
-def run_action(state: Dict[str, Any], name: str) -> str:
+def run_action(state: Dict[str, Any], name: str, rng: Any = random) -> str:
     if name not in ACTIONS:
         raise KeyError("invalid_action")
+    if name == "pitch_vc":
+        return action_pitch_vc(state, rng)
     return ACTIONS[name](state)
