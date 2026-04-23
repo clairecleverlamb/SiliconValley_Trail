@@ -30,6 +30,7 @@ def _update_coffee_emergency(state: Dict[str, Any]) -> None:
     else:
         state["coffee_emergency_turns"] = 0
 
+
 def resolve_turn(state: Dict[str, Any], action: str, rng: Any = random) -> Tuple[Dict[str, Any], str]:
     if state["status"] != "playing":
         return state, "The journey is already over."
@@ -48,9 +49,6 @@ def resolve_turn(state: Dict[str, Any], action: str, rng: Any = random) -> Tuple
     flavor = actions.run_action(state, action, rng)
     resources.clamp_resources(state)
     after_action = resources.resource_snapshot(state)
-    action_d = resources.format_deltas(
-        resources.delta_snapshots(before, after_action)
-    )
 
     _passive_decay(state)
     resources.clamp_resources(state)
@@ -69,9 +67,6 @@ def resolve_turn(state: Dict[str, Any], action: str, rng: Any = random) -> Tuple
     msg = " ".join(parts)
 
     _update_coffee_emergency(state)
-
-
-##travel action handler, it updates the current location index and refreshes the weather
 
     if action == "travel":
         new_idx = state["current_location_index"] + 1
@@ -111,6 +106,7 @@ def resolve_turn(state: Dict[str, Any], action: str, rng: Any = random) -> Tuple
             state, game_state.LOCATIONS[idx]["name"]
         )
     return state, msg
+
 
 def resolve_event_turn(state: Dict[str, Any], choice: int, rng: Any = random) -> Tuple[Dict[str, Any], str]:
     if state["status"] != "playing":
