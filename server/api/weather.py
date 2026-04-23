@@ -34,6 +34,19 @@ OPEN_METEO_FORECAST = "https://api.open-meteo.com/v1/forecast"
 # Server-level weather cache — shared across all games/players in the process.
 # Tuple value is (weather_dict, monotonic_timestamp_of_fetch).
 _CACHE_TTL_SECONDS = 300  # 5 minutes: fine-grained enough for gameplay, coarse enough to spare the API
+_FETCH_TIMEOUT_SECONDS = 5  # per-city HTTP request timeout
+_MAX_FETCH_WORKERS = 10     # max parallel threads for bulk city fetch on new-game POST
+_DEFAULT_FALLBACK_CITY = "San Jose"  # used when a city name has no entry in WEATHER_FALLBACK
+
+# Weather travel modifiers — applied on top of the base travel cost when entering a city.
+WEATHER_MOD_RAIN_CASH    = -500
+WEATHER_MOD_RAIN_MORALE  = -5
+WEATHER_MOD_CLEAR_MORALE = 5
+WEATHER_MOD_FOG_COFFEE   = -2
+WEATHER_MOD_CLOUDS_CASH  = -200
+WEATHER_MOD_CLOUDS_MORALE = -2
+WEATHER_MOD_OTHER_MORALE  = -1
+
 _server_weather_cache: Dict[str, Tuple[Dict[str, Any], float]] = {}
 _cache_lock = threading.Lock()
 
@@ -97,11 +110,11 @@ def fetch_weather(city: str) -> Dict[str, Any]:
     so the game never blocks on weather availability.
     """
     if os.getenv("WEATHER_OFFLINE", "").strip() in ("1", "true", "yes"):
-        return dict(WEATHER_FALLBACK.get(city, WEATHER_FALLBACK["San Jose"]))
+        return dict(WEATHER_FALLBACK.get(city, WEATHER_FALLBACK[_DEFAULT_FALLBACK_CITY]))
 
     coords = CITY_COORDS.get(city)
     if not coords:
-        return dict(WEATHER_FALLBACK.get(city, WEATHER_FALLBACK["San Jose"]))
+        return dict(WEATHER_FALLBACK.get(city, WEATHER_FALLBACK[_DEFAULT_FALLBACK_CITY]))
 
     # Return cached entry if still fresh.
     with _cache_lock:
@@ -119,7 +132,7 @@ def fetch_weather(city: str) -> Dict[str, Any]:
                 "current": "temperature_2m,weather_code",
                 "temperature_unit": "fahrenheit",
             },
-            timeout=5,
+            timeout=_FETCH_TIMEOUT_SECONDS,
         )
         res.raise_for_status()
         data = res.json()
@@ -132,7 +145,7 @@ def fetch_weather(city: str) -> Dict[str, Any]:
             _server_weather_cache[city] = (result, time.monotonic())
         return dict(result)
     except Exception:
-        return dict(WEATHER_FALLBACK.get(city, WEATHER_FALLBACK["San Jose"]))
+        return dict(WEATHER_FALLBACK.get(city, WEATHER_FALLBACK[_DEFAULT_FALLBACK_CITY]))
 
 
 def fetch_all_weather(locations: List[Dict[str, str]]) -> Dict[str, Dict[str, Any]]:
@@ -141,7 +154,7 @@ def fetch_all_weather(locations: List[Dict[str, str]]) -> Dict[str, Dict[str, An
     if not names:
         return {}
     out: Dict[str, Dict[str, Any]] = {}
-    workers = min(len(names), 10)
+    workers = min(len(names), _MAX_FETCH_WORKERS)
     with ThreadPoolExecutor(max_workers=workers) as pool:
         future_to_city = {pool.submit(fetch_weather, name): name for name in names}
         for fut in as_completed(future_to_city):
@@ -149,7 +162,7 @@ def fetch_all_weather(locations: List[Dict[str, str]]) -> Dict[str, Dict[str, An
             try:
                 out[city] = fut.result()
             except Exception:
-                out[city] = dict(WEATHER_FALLBACK.get(city, WEATHER_FALLBACK["San Jose"]))
+                out[city] = dict(WEATHER_FALLBACK.get(city, WEATHER_FALLBACK[_DEFAULT_FALLBACK_CITY]))
     return out
 
 
@@ -181,14 +194,14 @@ def condition_bucket(condition: Any) -> str:
 def apply_weather_modifiers(state: Dict[str, Any], weather: Dict[str, Any]) -> None:
     bucket = condition_bucket(weather.get("condition"))
     if bucket == "rain":
-        state["resources"]["cash"] -= 500
-        state["resources"]["morale"] -= 5
+        state["resources"]["cash"]   += WEATHER_MOD_RAIN_CASH
+        state["resources"]["morale"] += WEATHER_MOD_RAIN_MORALE
     elif bucket == "clear":
-        state["resources"]["morale"] += 5
+        state["resources"]["morale"] += WEATHER_MOD_CLEAR_MORALE
     elif bucket == "fog":
-        state["resources"]["coffee"] -= 2
+        state["resources"]["coffee"] += WEATHER_MOD_FOG_COFFEE
     elif bucket == "clouds":
-        state["resources"]["cash"] -= 200
-        state["resources"]["morale"] -= 2
+        state["resources"]["cash"]   += WEATHER_MOD_CLOUDS_CASH
+        state["resources"]["morale"] += WEATHER_MOD_CLOUDS_MORALE
     elif bucket == "other":
-        state["resources"]["morale"] -= 1
+        state["resources"]["morale"] += WEATHER_MOD_OTHER_MORALE
