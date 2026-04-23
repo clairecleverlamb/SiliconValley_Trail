@@ -143,6 +143,9 @@ def test_fetch_weather_open_meteo_response_parsed(monkeypatch):
 
     monkeypatch.delenv("WEATHER_OFFLINE", raising=False)
     monkeypatch.setattr("api.weather.requests.get", lambda *a, **k: FakeResp())
+    # Clear the server-level cache so this test exercises the live-fetch path, not a
+    # stale entry written by an earlier test.
+    weather_api._server_weather_cache.clear()
     out = weather_api.fetch_weather("San Jose")
     assert out["condition"] == "Clear"
     assert out["temp"] == 65
