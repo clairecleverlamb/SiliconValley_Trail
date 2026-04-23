@@ -148,11 +148,11 @@ def apply_weather_modifiers(state: Dict[str, Any], weather: Dict[str, Any]) -> N
         state["resources"]["cash"] -= 500
         state["resources"]["morale"] -= 5
     elif bucket == "clear":
-        state["resources"]["morale"] = min(100, state["resources"]["morale"] + 5)
+        state["resources"]["morale"] += 5
     elif bucket == "fog":
         state["resources"]["coffee"] -= 2
     elif bucket == "clouds":
         state["resources"]["cash"] -= 200
         state["resources"]["morale"] -= 2
     elif bucket == "other":
-        state["resources"]["morale"] = max(0, state["resources"]["morale"] - 1)
+        state["resources"]["morale"] -= 1

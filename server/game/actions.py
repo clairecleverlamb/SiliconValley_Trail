@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import random
-from typing import Any, Callable, Dict, Union
+from typing import Any, Callable, Dict
 
 # 60 % of VC pitches succeed — tuned to keep cash tension without making pitching feel futile.
 VC_PITCH_SUCCESS_RATE = 0.6

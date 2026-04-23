@@ -8,6 +8,7 @@ A replayable, Oregon Trail–style survival game for a scrappy startup driving f
 |---|---|
 | **Source Code** | [github.com/clairecleverlamb/SiliconValley_Trail](https://github.com/clairecleverlamb/SiliconValley_Trail) |
 | **Live App** | [siliconvalleytrail-0a70c4621c3e.herokuapp.com](https://siliconvalleytrail-0a70c4621c3e.herokuapp.com/) |
+| **Demo Video** | [youtu.be/0FNCjyeTJsQ](https://youtu.be/0FNCjyeTJsQ) |
 | **Trello Board** | [trello.com/b/ywkWAan0/silicon-valley-trail](https://trello.com/b/ywkWAan0/silicon-valley-trail) |
 | **Design Notes** | [Google Doc](https://docs.google.com/document/d/1R2eA5L-KQ59NZut7s5cs9GnEsiwRfGLMpWYfgsh1hNQ/edit?tab=t.0) |
 | **Test Tracker** | [Google Sheets](https://docs.google.com/spreadsheets/d/1Ze7bkQS1GjRClXzMj7oVHJIh56OzV7ZNF-kzHdV8vNc/edit?gid=0#gid=0) |
