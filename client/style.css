@@ -493,14 +493,12 @@ body {
 
 #mining-count,
 #typing-progress,
-#bug-squash-count,
 #coffee-hunt-count {
   color: #5cff8a;
 }
 
 #mining-timer,
 #typing-timer,
-#bug-squash-timer,
 #coffee-hunt-timer {
   color: #ffc14d;
 }
@@ -572,33 +570,6 @@ body {
   cursor: not-allowed;
 }
 
-.bug-squash-bug {
-  position: absolute;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, #ff9a88, #c04030 55%, #3a1210);
-  box-shadow:
-    0 0 12px rgba(255, 80, 60, 0.55),
-    inset 0 0 6px rgba(255, 255, 255, 0.2);
-  cursor: pointer;
-  border: none;
-  padding: 0;
-  font-size: 1.1rem;
-  line-height: 1;
-  animation: bugPop 0.35s ease;
-}
-
-@keyframes bugPop {
-  from {
-    transform: scale(0);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
 
 .mining-abort {
   display: block;
