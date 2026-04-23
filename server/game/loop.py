@@ -5,6 +5,9 @@ from __future__ import annotations
 import random
 from typing import Any, Dict, Tuple
 
+# Probability of offering a bonus minigame after an event choice (subject to pity and first-event rules).
+BONUS_MINIGAME_CHANCE = 0.55
+
 from api import weather as weather_api
 
 from . import actions
@@ -67,6 +70,8 @@ def resolve_turn(state: Dict[str, Any], action: str, rng: Any = random) -> Tuple
 
     _update_coffee_emergency(state)
 
+
+##travel action handler, it updates the current location index and refreshes the weather
 
     if action == "travel":
         new_idx = state["current_location_index"] + 1
@@ -163,7 +168,6 @@ def resolve_event_turn(state: Dict[str, Any], choice: int, rng: Any = random) ->
     elif int(state.get("events_since_bonus", 0)) >= 2:
         force_bonus = True
 
-    BONUS_MINIGAME_CHANCE = 0.55
     if force_bonus or rng.random() < BONUS_MINIGAME_CHANCE:
         state["mining_eligible"] = True
         state["minigame_type"] = rng.choice(["mining", "typing", "coffee_hunt"])

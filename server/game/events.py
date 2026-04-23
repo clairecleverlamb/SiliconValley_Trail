@@ -7,6 +7,11 @@ import random
 from typing import Any, Dict, List, Optional, Tuple
 from api import weather as weather_api
 
+# Weather-event injection probabilities tuned so bad weather meaningfully affects play.
+# Rough conditions (rain/fog/clouds) make a weather event ~75% more likely than calm skies.
+P_WEATHER_EVENT_ROUGH = 0.42   # rain, fog, or clouds
+P_WEATHER_EVENT_CALM  = 0.24   # clear or any other condition
+
 from . import resources
 
 WEATHER_EVENT_RAIN = {
@@ -363,7 +368,7 @@ def pick_event(location_name: str, weather: Dict[str, Any], rng: Any = random) -
     if not pool:
         pool = LOCATION_EVENTS["San Jose"]
     bucket = weather_api.condition_bucket(weather.get("condition"))
-    p_weather = 0.42 if bucket in ("rain", "fog", "clouds") else 0.24
+    p_weather = P_WEATHER_EVENT_ROUGH if bucket in ("rain", "fog", "clouds") else P_WEATHER_EVENT_CALM
     if rng.random() < p_weather:
         ev = get_weather_event(weather)
         if ev is not None:

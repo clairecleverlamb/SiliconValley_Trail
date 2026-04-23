@@ -5,6 +5,9 @@ from __future__ import annotations
 import random
 from typing import Any, Callable, Dict, Union
 
+# 60 % of VC pitches succeed — tuned to keep cash tension without making pitching feel futile.
+VC_PITCH_SUCCESS_RATE = 0.6
+
 from api import weather as weather_api
 from . import resources
 from . import state as game_state
@@ -85,7 +88,7 @@ def action_pitch_vc(state: Dict[str, Any], rng: Any = random) -> str:
     loc = game_state.LOCATIONS[min(i, len(game_state.LOCATIONS) - 1)]["name"]
     before = resources.resource_snapshot(state)
     r = state["resources"]
-    if rng.random() < 0.6:
+    if rng.random() < VC_PITCH_SUCCESS_RATE:
         r["cash"] += 15000
         r["hype"] += 20
         resources.clamp_resources(state)
