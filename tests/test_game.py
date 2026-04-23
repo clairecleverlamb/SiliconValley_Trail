@@ -304,6 +304,25 @@ def test_minigame_rejects_non_bool_success():
         assert res.status_code == 400, f"{endpoint} accepted missing 'success'"
 
 
+def test_load_returns_500_when_file_game_id_mismatches(tmp_path, monkeypatch):
+    """A save file whose game_id differs from the URL param is a server-side data problem → 500."""
+    import json as _json
+    import routes.game as game_routes
+
+    monkeypatch.setattr(game_routes, "_GAMES_DIR", tmp_path)
+    flask_app.config.update(TESTING=True)
+    client = flask_app.test_client()
+
+    gid = client.post("/api/games").get_json()["game_id"]
+    # Write a file whose internal game_id is deliberately wrong.
+    corrupt = tmp_path / f"{gid}.json"
+    corrupt.write_text(_json.dumps({"game_id": "some-other-id", "status": "playing"}))
+
+    res = client.post(f"/api/games/{gid}/loads")
+    assert res.status_code == 500
+    assert "game_id" in (res.get_json().get("error") or "").lower()
+
+
 def test_save_with_display_name_writes_slug_file(tmp_path, monkeypatch):
     import routes.game as game_routes
 

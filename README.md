@@ -35,6 +35,8 @@ flask --app app run
 
 Open [http://127.0.0.1:5000](http://127.0.0.1:5000) in your browser.
 
+> **Single-process only.** Active game sessions live in an in-memory Python dict. Running with multiple workers (e.g. `flask run --processes 2` or a multi-worker Gunicorn) splits that dict across processes, so a second request for the same game will hit a different worker and get "Game not found." The default `flask run` is single-process — keep it that way locally. Production uses `gunicorn --workers 1 --threads 4` for the same reason.
+
 To run the API on another port:
 
 ```bash

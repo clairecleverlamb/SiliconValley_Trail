@@ -234,7 +234,7 @@ def restore_save():
 
     gid = st.get("game_id")
     if not isinstance(gid, str) or not gid:
-        return jsonify({"error": "Save file is invalid."}), 400
+        return jsonify({"error": "Save file is corrupted (missing game_id)."}), 500
 
     _finalize_loaded_state(st)
     put_game(st)
@@ -251,7 +251,7 @@ def load_game(game_id: str):
         st = json.load(f)
 
     if st.get("game_id") != game_id:
-        return jsonify({"error": "Save file does not match this game id"}), 400
+        return jsonify({"error": "Save file game_id does not match the requested id."}), 500
 
     _finalize_loaded_state(st)
     put_game(st)
