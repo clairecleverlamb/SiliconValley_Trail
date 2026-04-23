@@ -41,7 +41,14 @@ def _not_found() -> tuple:
     return jsonify({"error": "Game not found"}), 404
 
 
-_SAVE_SLUG_MAX = 48
+def _require_bool_success(data: dict) -> tuple | None:
+    """Return a 400 response if 'success' is absent or not a JSON boolean, else None."""
+    if not isinstance(data.get("success"), bool):
+        return jsonify({"error": "'success' must be a JSON boolean (true or false)"}), 400
+    return None
+
+
+_SAVE_SLUG_MAX = 48 #it is the filename of the save file, it is a unique identifier for the save file
 
 
 def _save_slug(display: str) -> str | None:
@@ -258,10 +265,11 @@ def mining_minigame(game_id: str):
         return _not_found()
 
     data = request.get_json(silent=True) or {}
-    if "success" not in data:
-        return jsonify({"error": "success boolean required"}), 400
+    err = _require_bool_success(data)
+    if err:
+        return err
 
-    st, outcome = game_minigames.apply_mining_result(st, bool(data["success"]))
+    st, outcome = game_minigames.apply_mining_result(st, data["success"])
     put_game(st)
     return _json_with_outcome(st, outcome)
 
@@ -273,10 +281,11 @@ def typing_minigame(game_id: str):
         return _not_found()
 
     data = request.get_json(silent=True) or {}
-    if "success" not in data:
-        return jsonify({"error": "success boolean required"}), 400
+    err = _require_bool_success(data)
+    if err:
+        return err
 
-    st, outcome = game_minigames.apply_typing_result(st, bool(data["success"]))
+    st, outcome = game_minigames.apply_typing_result(st, data["success"])
     put_game(st)
     return _json_with_outcome(st, outcome)
 
@@ -288,9 +297,10 @@ def coffee_hunt_minigame(game_id: str):
         return _not_found()
 
     data = request.get_json(silent=True) or {}
-    if "success" not in data:
-        return jsonify({"error": "success boolean required"}), 400
+    err = _require_bool_success(data)
+    if err:
+        return err
 
-    st, outcome = game_minigames.apply_coffee_hunt_result(st, bool(data["success"]))
+    st, outcome = game_minigames.apply_coffee_hunt_result(st, data["success"])
     put_game(st)
     return _json_with_outcome(st, outcome)

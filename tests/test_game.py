@@ -290,6 +290,20 @@ def test_pitch_vc_allowed_from_starting_location():
     assert "San Jose" in out or "Great pitch" in out or "flopped" in out.lower()
 
 
+def test_minigame_rejects_non_bool_success():
+    """Sending success as a string (e.g. "no") must return 400, not silently treat it as True."""
+    flask_app.config.update(TESTING=True)
+    client = flask_app.test_client()
+    gid = client.post("/api/games").get_json()["game_id"]
+    for endpoint in ("mining", "typing", "coffee_hunt"):
+        # string "no" would be truthy with bool() — must be rejected
+        res = client.post(f"/api/games/{gid}/minigames/{endpoint}", json={"success": "no"})
+        assert res.status_code == 400, f"{endpoint} accepted a string for 'success'"
+        # missing key must also be rejected
+        res = client.post(f"/api/games/{gid}/minigames/{endpoint}", json={})
+        assert res.status_code == 400, f"{endpoint} accepted missing 'success'"
+
+
 def test_save_with_display_name_writes_slug_file(tmp_path, monkeypatch):
     import routes.game as game_routes
 
