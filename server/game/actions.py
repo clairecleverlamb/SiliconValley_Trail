@@ -5,12 +5,12 @@ from __future__ import annotations
 import random
 from typing import Any, Callable, Dict
 
-# 60 % of VC pitches succeed — tuned to keep cash tension without making pitching feel futile.
-VC_PITCH_SUCCESS_RATE = 0.6
-
 from api import weather as weather_api
 from . import resources
 from . import state as game_state
+
+# 60% of VC pitches succeed — tuned to keep cash tension without making pitching feel futile.
+VC_PITCH_SUCCESS_RATE = 0.6
 
 ActionFn = Callable[[Dict[str, Any]], str]
 

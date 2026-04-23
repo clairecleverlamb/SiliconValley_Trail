@@ -5,9 +5,6 @@ from __future__ import annotations
 import random
 from typing import Any, Dict, Tuple
 
-# Probability of offering a bonus minigame after an event choice (subject to pity and first-event rules).
-BONUS_MINIGAME_CHANCE = 0.55
-
 from api import weather as weather_api
 
 from . import actions
@@ -15,6 +12,9 @@ from . import conditions
 from . import events as game_events
 from . import resources
 from . import state as game_state
+
+# Probability of offering a bonus minigame after an event choice (subject to pity and first-event rules).
+BONUS_MINIGAME_CHANCE = 0.55
 
 
 def _passive_decay(state: Dict[str, Any]) -> None:

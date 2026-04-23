@@ -48,7 +48,8 @@ def _require_bool_success(data: dict) -> tuple | None:
     return None
 
 
-_SAVE_SLUG_MAX = 48 #it is the filename of the save file, it is a unique identifier for the save file
+# Cap slug length so filenames stay well under common filesystem limits (255 chars on most OS).
+_SAVE_SLUG_MAX = 48
 
 
 def _save_slug(display: str) -> str | None:
