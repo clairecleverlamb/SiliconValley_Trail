@@ -45,7 +45,6 @@ def _wrong_minigame(state: Dict[str, Any], expected: str) -> bool:
 
 
 def apply_mining_result(state: Dict[str, Any], success: bool) -> Tuple[Dict[str, Any], str]:
-    # check if the game is still playing a stale HTTP requests can be sent from browser POSTing to minigames endpoint
     if state.get("status") != "playing":
         return state, "The journey is already over."
     if _wrong_minigame(state, "mining"):
@@ -84,23 +83,23 @@ def apply_mining_result(state: Dict[str, Any], success: bool) -> Tuple[Dict[str,
     _clear_bonus_round(state)
     r = state["resources"]
     if success:
-        r["cash"] = r.get("cash", 0) + MINING_BONUS_CASH
-        r["coffee"] = r.get("coffee", 0) + MINING_BONUS_COFFEE
-        r["morale"] = min(100, r.get("morale", 0) + MINING_BONUS_MORALE)
-        r["hype"] = min(100, r.get("hype", 0) + MINING_BONUS_HYPE)
+        r["cash"] += MINING_BONUS_CASH
+        r["coffee"] += MINING_BONUS_COFFEE
+        r["morale"] += MINING_BONUS_MORALE
+        r["hype"] += MINING_BONUS_HYPE
         game_state.append_log(
             state,
             f"Codebase mining haul: +${MINING_BONUS_CASH} cash, +{MINING_BONUS_COFFEE} coffee, +{MINING_BONUS_MORALE} morale, +{MINING_BONUS_HYPE} hype.",
         )
         resources.clamp_resources(state)
         return state, out
-    r["morale"] = max(0, r.get("morale", 0) - MINING_FAIL_MORALE) 
-    r["hype"] = max(0, r.get("hype", 0) - MINING_FAIL_HYPE)
+    r["morale"] -= MINING_FAIL_MORALE
+    r["hype"] -= MINING_FAIL_HYPE
     game_state.append_log(
         state,
         f"Mining drill failed: -{MINING_FAIL_MORALE} morale, -{MINING_FAIL_HYPE} hype.",
     )
-    resources.clamp_resources(state) 
+    resources.clamp_resources(state)
     return state, out
 
 
@@ -142,17 +141,17 @@ def apply_typing_result(state: Dict[str, Any], success: bool) -> Tuple[Dict[str,
     _clear_bonus_round(state)
     r = state["resources"]
     if success:
-        r["coffee"] = r.get("coffee", 0) + TYPING_BONUS_COFFEE
-        r["morale"] = min(100, r.get("morale", 0) + TYPING_BONUS_MORALE)
-        r["hype"] = min(100, r.get("hype", 0) + TYPING_BONUS_HYPE)
+        r["coffee"] += TYPING_BONUS_COFFEE
+        r["morale"] += TYPING_BONUS_MORALE
+        r["hype"] += TYPING_BONUS_HYPE
         game_state.append_log(
             state,
             f"Coffee order rush: +{TYPING_BONUS_COFFEE} coffee, +{TYPING_BONUS_MORALE} morale, +{TYPING_BONUS_HYPE} hype.",
         )
         resources.clamp_resources(state)
         return state, out
-    r["morale"] = max(0, r.get("morale", 0) - TYPING_FAIL_MORALE)
-    r["hype"] = max(0, r.get("hype", 0) - TYPING_FAIL_HYPE)
+    r["morale"] -= TYPING_FAIL_MORALE
+    r["hype"] -= TYPING_FAIL_HYPE
     game_state.append_log(
         state,
         f"Order botched: -{TYPING_FAIL_MORALE} morale, -{TYPING_FAIL_HYPE} hype.",
@@ -199,17 +198,17 @@ def apply_coffee_hunt_result(state: Dict[str, Any], success: bool) -> Tuple[Dict
     _clear_bonus_round(state)
     r = state["resources"]
     if success:
-        r["coffee"] = r.get("coffee", 0) + HUNT_COFFEE_BONUS
-        r["morale"] = min(100, r.get("morale", 0) + HUNT_COFFEE_MORALE)
-        r["hype"] = min(100, r.get("hype", 0) + HUNT_BONUS_HYPE)
+        r["coffee"] += HUNT_COFFEE_BONUS
+        r["morale"] += HUNT_COFFEE_MORALE
+        r["hype"] += HUNT_BONUS_HYPE
         game_state.append_log(
             state,
             f"Coffee hunt: bagged beans for the office. +{HUNT_COFFEE_BONUS} coffee, +{HUNT_COFFEE_MORALE} morale, +{HUNT_BONUS_HYPE} hype.",
         )
         resources.clamp_resources(state)
         return state, out
-    r["morale"] = max(0, r.get("morale", 0) - HUNT_FAIL_MORALE)
-    r["hype"] = max(0, r.get("hype", 0) - HUNT_FAIL_HYPE)
+    r["morale"] -= HUNT_FAIL_MORALE
+    r["hype"] -= HUNT_FAIL_HYPE
     game_state.append_log(
         state,
         f"Coffee hunt whiffed: -{HUNT_FAIL_MORALE} morale, -{HUNT_FAIL_HYPE} hype.",
