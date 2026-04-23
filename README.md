@@ -104,6 +104,22 @@ Registered under **`/api/games`** in `server/app.py` (handlers in `server/routes
 | `POST` | `/api/games/<game_id>/minigames/typing` | Same body — coffee typing sprint (`minigame_type`: `"typing"`). |
 | `POST` | `/api/games/<game_id>/minigames/coffee_hunt` | Same body — aim-and-shoot bean hunt (`minigame_type`: `"coffee_hunt"`). |
 
+**Example — take the "rest" action in a running game:**
+
+```bash
+curl -s -X POST http://127.0.0.1:5000/api/games/<game_id>/moves \
+     -H "Content-Type: application/json" \
+     -d '{"action": "rest"}'
+```
+
+**Example — resolve event choice 2:**
+
+```bash
+curl -s -X POST http://127.0.0.1:5000/api/games/<game_id>/events/choices \
+     -H "Content-Type: application/json" \
+     -d '{"choice": 2}'
+```
+
 ## Running tests
 
 From the **project root** (where `pytest.ini` lives), with the virtualenv active:
@@ -161,9 +177,47 @@ After a minigame resolves, the game produces a message that ties the player's mo
 
 Every combination produces a valid message. Higher levels just produce more meaning.
 
+### Game loop & balance
+
+Each turn follows the same pipeline regardless of action chosen:
+
+1. **Action** — the player's chosen handler runs (travel, rest, hackathon, pitch VC, marketing push, buy supplies), applying its base effects and any weather modifier.
+2. **Clamp** — resources are clamped to their legal ranges (`morale` and `hype` 0–100; `cash`, `coffee`, `bugs` floored at 0).
+3. **Passive decay** — every turn, regardless of action: −3 coffee, +1 bug, −`DAILY_OVERHEAD_CASH` ($320) cash. This represents burn rate and technical debt accumulating in the background.
+4. **Coffee emergency check** — if coffee hits 0, an emergency counter increments. Three consecutive turns at zero triggers a lose condition.
+5. **Win / lose check** — win (San Francisco reached) is evaluated before lose, so arriving on the same turn resources collapse still counts as a win.
+6. **Day counter advances** — then a time-out check fires; exceeding `MAX_JOURNEY_DAYS` (20) is the fifth lose condition.
+
+Balance was tuned around the constraint: $20k starting cash, $320/turn overhead, $1,500 base travel cost, and 20 days maximum. A player who only rests and never travels runs out of days; one who only travels runs out of cash. The tension is intentional — every action has a reason to use it and a cost that makes you hesitate.
+
+### API choice: Open-Meteo and how it affects gameplay
+
+Open-Meteo was chosen because it is **keyless, free, and requires no signup** — the app works on any fresh machine without configuration, which matters for a take-home that will be run by a reviewer. Real lat/lon coordinates for each trail city mean the weather reflects actual Peninsula microclimates (San Francisco is genuinely foggier and colder than San Jose), which grounds the game in its setting.
+
+Weather is mapped to five gameplay buckets, each with a travel modifier applied on top of the base $1,500 travel cost:
+
+| Condition | Cash | Morale | Coffee |
+|-----------|------|--------|--------|
+| Rain | −$500 | −5 | — |
+| Clouds | −$200 | −2 | — |
+| Fog | — | — | −2 |
+| Clear | — | +5 | — |
+| Other (snow, unknown) | — | −1 | — |
+
+This means weather is not just flavour — a rainy day adds $500 to the cost of traveling, which can matter when cash is tight. Players who check the weather panel before deciding whether to travel or wait are playing more efficiently.
+
+### Error handling
+
+Error handling follows one rule: **the game should never crash or return an unformatted response**, regardless of what goes wrong externally.
+
+- **Network failures** — every `requests.get` call to Open-Meteo is wrapped in a broad `except Exception` that falls back to the `WEATHER_FALLBACK` static dict. A timeout, DNS failure, or malformed JSON response all land the same way: the game continues with reasonable mock weather.
+- **Rate limits** — Open-Meteo returns HTTP 429 on overuse. `raise_for_status()` turns this into an exception, which the same fallback catches. The server-side 5-minute cache means a sustained burst of turns for multiple players still produces at most one outbound request per city per TTL window.
+- **Bad client input** — route handlers validate every required field before touching game state, and return structured `{"error": "..."}` JSON with an appropriate status code (`400` for bad input, `404` for unknown game, `409` for name conflict, `500` for server-side data corruption). No stack trace ever reaches the browser.
+- **Stale or missing save files** — the load path checks that the file exists, that it parses as valid JSON, and that the internal `game_id` matches the requested id. Each failure returns a distinct error message so the client can surface useful feedback.
+
 ## Future Improvements — Systems Thinking at Scale
 
-The current app is intentionally scoped for a single-server demo: clean, quick, and deployable. The limitations below are known tradeoffs, not oversights, each one has a clear upgrade path when the use case demands it in the future.
+The current app is intentionally scoped for a single-server demo: clean, quick, and deployable. The limitations below are known tradeoffs, not oversights — each one was a conscious scope decision, and each has a clear upgrade path. This is what I would tackle first if the project continued.
 
 **Scale** — The app is currently single-server by design: all active sessions live in one process's memory, so adding a second server or worker would split that state and break the game. Moving session storage to Redis — a shared, external key-value store — decouples state from any individual server instance, making horizontal scaling straightforward without changing the game logic.
 
