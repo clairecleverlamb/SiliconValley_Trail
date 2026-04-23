@@ -341,36 +341,9 @@ LOCATION_EVENTS: Dict[str, List[Dict[str, Any]]] = {
             ],
         },
     ],
-    "San Francisco": [
-        {
-            "id": "demo_day_jitters",
-            "title": "Demo Day Jitters",
-            "description": "The big stage at a downtown venue. Lights, deck, anxiety.",
-            "choices": [
-                {"label": "Memorize script", "outcome": "You sound human.", "effects": {"morale": 10, "coffee": -5}},
-                {
-                    "label": "Wing it",
-                    "outcome": "Chaos charisma.",
-                    "effects": {},
-                    "risk_chance": 0.5,
-                    "risk_effects": {"hype": -15, "morale": -10},
-                    "success_effects": {"hype": 25, "cash": 5000},
-                },
-                {"label": "Skip networking", "outcome": "Rest before the reckoning.", "effects": {"morale": 15, "bugs": 3}},
-            ],
-        },
-        {
-            "id": "series_a_drinks",
-            "title": "Series A Drinks",
-            "description": "Investors toast your arrival while asking about churn.",
-            "choices": [
-                {"label": "Cheers honestly", "outcome": "Trust compounds.", "effects": {"morale": 15, "hype": 10}},
-                {"label": "Nerd out on metrics", "outcome": "They like the rigor.", "effects": {"cash": 3000, "bugs": -5}},
-                {"label": "Call it early", "outcome": "Sleep is a moat.", "effects": {"coffee": 10, "morale": 5}},
-            ],
-        },
-    ],
 }
+# Note: San Francisco (index 9) never triggers events — the win condition fires
+# immediately on arrival (see loop.py resolve_turn, new_idx < 9 guard).
 
 
 def get_weather_event(weather: Dict[str, Any]) -> Optional[Dict[str, Any]]:

@@ -135,16 +135,6 @@ _NARRATIVES: Dict[Tuple[str, str], Dict[str, Dict[bool, str]]] = {
                         False: "Roadmap public, hunt missed, inbox exploding. Not your best Tuesday."},
     },
 
-    # ── DEMO DAY JITTERS (San Francisco) ─────────────────────────────────────
-    ("demo_day_jitters", "Wing it"): {
-        "mining":      {True:  "Winged the demo day and crushed the mining sprint. Controlled chaos is still chaos. The Series A table is watching.",
-                        False: "Winged the demo and the mining sprint crumbled. The investors checked their phones during the pitch."},
-        "typing":      {True:  "Improvised the whole demo, then typed a perfect order under pressure. You are the product.",
-                        False: "Winged everything, failed the typing sprint. Improvisation has limits."},
-        "coffee_hunt": {True:  "Winged the stage, bagged every bean offstage. The crowd doesn't need to know how the sausage is made.",
-                        False: "Improvised the demo and whiffed the hunt. At least you're memorable."},
-    },
-
     # ── BIKE THE BAY (San Mateo) ──────────────────────────────────────────────
     ("almost_sf_tolls", "Bike the bay"): {
         "mining":      {True:  "Biked the bay AND mined a haul on arrival. Legendary. The LinkedIn post writes itself.",
