@@ -115,13 +115,52 @@ Minigame rewards are applied **server-side only**. The client runs the visual mo
 
 If any guard fails the server returns a no-op message and leaves state unchanged. A client (or a curl script) cannot award itself resources by POSTing to minigame endpoints outside the normal flow.
 
-### Bonus narrative design
+### Bonus narrative — three-level fallback design
 
-After every resolved event, `bonus_narrative.py` picks a contextual message that connects the story choice to the minigame result. The module uses a **data/logic separation** pattern:
+After a minigame resolves, `bonus_narrative.py` produces a contextual message that connects the player's story choice to the minigame result. The system uses a **three-level fallback chain** so every possible combination always produces a valid message, but higher levels reward high-drama moments with richer storytelling.
 
-- `_NARRATIVES` stores only the unique one-sentence flavor text per `(event_id, choice_label, minigame, success)` key.
-- `_build_message` assembles the full line from prefix + narrative + resource suffix — the boilerplate is generated once in code, not repeated 360 times in data.
-- Combinations not in `_NARRATIVES` fall through to a generic `'After "label": …'` bridge, so every possible combination produces a valid message without requiring exhaustive hand-written content.
+**Level 1 — Bespoke narrative (hand-written for high-drama combinations)**
+
+`_NARRATIVES` is a dict keyed by `(event_id, choice_label)`. If the exact combination exists, `_build_message` composes prefix + unique prose + resource suffix into one contextually meaningful line.
+
+Example — player declined a VC pitch, then won the mining minigame:
+```
+Bonus WON — Polite decline on the pitch—then a sharp mining sprint.
+The partner smirks: you're not desperate, but you execute.
+(+$750 cash, +5 coffee, +3 morale, +3 hype)
+```
+This works because the two events have an ironic relationship: declining a powerful VC and then immediately executing well tells a coherent story. A generic message would lose that.
+
+**Level 2 — Generic bridge (label-prefixed default)**
+
+When `_NARRATIVES` has no entry for this combination, but `last_event_choice` still carries the choice label, the function prefixes the mechanical default with the player's decision:
+
+```python
+return f'After "{label}": {default_message}'
+```
+
+Example — player paid for rush shipping, then won mining:
+```
+After "Pay for rush shipping": Bonus WON — Mining haul secured: +$750 cash, +5 coffee, +3 morale, +3 hype.
+```
+This is correct and intentional. Paying for shipping and then winning at mining have no special narrative relationship — the bridge is informative without inventing meaning that isn't there.
+
+**Level 3 — Bare fallback (no context)**
+
+If there is no prior event context at all (minigame fires after a non-event action, or state is missing context), the raw default message is returned as-is:
+```
+Bonus WON — Mining haul secured: +$750 cash, +5 coffee, +3 morale, +3 hype.
+```
+
+**The code in three lines:**
+```python
+narrative = _NARRATIVES.get((event_id, label), {}).get(minigame, {}).get(success)
+if narrative:               return _build_message(narrative, ...)  # Level 1
+if label:                   return f'After "{label}": {default}'   # Level 2
+                            return default                          # Level 3
+```
+
+**Why data/logic separation matters here:** `_NARRATIVES` stores only the unique one-sentence prose per combination — no boilerplate. `_build_message` generates "Bonus WON/LOST", resource formatting, and spacing once. Changing how resource changes are displayed (formatting, adding emoji, new fields) means editing one function, not hunting through a 400-line data dict. Adding new story content means adding one prose sentence, not copy-pasting a full template block.
 
 ### Error handling and fallback
 
