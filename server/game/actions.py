@@ -53,7 +53,7 @@ def action_travel(state: Dict[str, Any]) -> str:
 def action_rest(state: Dict[str, Any]) -> str:
     before = resources.resource_snapshot(state)
     r = state["resources"]
-    r["morale"] = min(100, r["morale"] + 20)
+    r["morale"] += 20
     r["coffee"] -= 8
     r["bugs"] += 2
     resources.clamp_resources(state)
@@ -67,10 +67,10 @@ def action_rest(state: Dict[str, Any]) -> str:
 def action_hackathon(state: Dict[str, Any]) -> str:
     before = resources.resource_snapshot(state)
     r = state["resources"]
-    r["bugs"] = max(0, r["bugs"] - 10)
+    r["bugs"] -= 10
     r["morale"] -= 10
     r["coffee"] -= 10
-    r["hype"] = min(100, r["hype"] + 5)
+    r["hype"] += 5
     resources.clamp_resources(state)
     after = resources.resource_snapshot(state)
     return (
@@ -87,7 +87,7 @@ def action_pitch_vc(state: Dict[str, Any]) -> str:
     r = state["resources"]
     if random.random() < 0.6:
         r["cash"] += 15000
-        r["hype"] = min(100, r["hype"] + 20)
+        r["hype"] += 20
         resources.clamp_resources(state)
         after = resources.resource_snapshot(state)
         return (
@@ -108,7 +108,7 @@ def action_marketing_push(state: Dict[str, Any]) -> str:
     before = resources.resource_snapshot(state)
     r = state["resources"]
     r["cash"] -= 3000
-    r["hype"] = min(100, r["hype"] + 25)
+    r["hype"] += 25
     r["morale"] -= 5
     resources.clamp_resources(state)
     after = resources.resource_snapshot(state)
@@ -123,7 +123,7 @@ def action_buy_supplies(state: Dict[str, Any]) -> str:
     r = state["resources"]
     r["cash"] -= 1500
     r["coffee"] += 20
-    r["morale"] = min(100, r["morale"] + 5)
+    r["morale"] += 5
     resources.clamp_resources(state)
     after = resources.resource_snapshot(state)
     return (
