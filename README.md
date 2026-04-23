@@ -2,6 +2,28 @@
 
 A replayable, Oregon Trail–style survival game for a scrappy startup driving from **San Jose** to **San Francisco** along real Peninsula cities. You manage cash, morale, coffee, hype, and bugs while random location events and live (or mocked) weather push back.
 
+---
+
+| | |
+|---|---|
+| **Source Code** | [github.com/clairecleverlamb/SiliconValley_Trail](https://github.com/clairecleverlamb/SiliconValley_Trail) |
+| **Live App** | [siliconvalleytrail-0a70c4621c3e.herokuapp.com](https://siliconvalleytrail-0a70c4621c3e.herokuapp.com/) |
+| **Trello Board** | [trello.com/b/ywkWAan0/silicon-valley-trail](https://trello.com/b/ywkWAan0/silicon-valley-trail) |
+| **Design Notes** | [Google Doc](https://docs.google.com/document/d/1R2eA5L-KQ59NZut7s5cs9GnEsiwRfGLMpWYfgsh1hNQ/edit?tab=t.0) |
+| **Test Tracker** | [Google Sheets](https://docs.google.com/spreadsheets/d/1Ze7bkQS1GjRClXzMj7oVHJIh56OzV7ZNF-kzHdV8vNc/edit?gid=0#gid=0) |
+
+---
+
+## Required features — how each is met
+
+**1. Testing** — 31 passing pytest tests cover every critical area: resource updates (travel, weather modifiers, all action types), all four lose conditions (cash, morale, coffee, bugs, calendar timeout), win condition, event choice effects, bonus minigame offer/skip/pity rules, weather API fallbacks, and the full save/load cycle. All randomness is injectable via an `rng` parameter so tests use a controlled `Mock` instead of patching global state.
+
+**2. Documentation** — This README documents the tech stack, API contract, status code matrix, game balance constants, storage layers, thread safety, and tradeoffs, with every claim verified against the code. [Design Notes](https://docs.google.com/document/d/1R2eA5L-KQ59NZut7s5cs9GnEsiwRfGLMpWYfgsh1hNQ/edit?tab=t.0) cover key architectural decisions and tradeoffs. [Test Tracker](https://docs.google.com/spreadsheets/d/1Ze7bkQS1GjRClXzMj7oVHJIh56OzV7ZNF-kzHdV8vNc/edit?gid=0#gid=0) logs manual testing scenarios.
+
+**3. Decency & safety** — All Open-Meteo calls are wrapped in `try/except` with a static fallback so the game never crashes on network issues. Route handlers return structured `{"error": "..."}` JSON with correct status codes; no stack traces reach the browser. The app has no API keys (Open-Meteo is keyless); all environment flags use `os.getenv()`. No user data is collected — sessions are anonymous server-generated UUIDs, save files contain only game state, and there are no cookies, logins, or analytics.
+
+---
+
 ## Tech stack (authoritative)
 
 Use this section for write-ups, proposals, and résumé bullets. It matches what this repository actually runs.
